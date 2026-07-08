@@ -7,4 +7,7 @@
     <string name="debug_settings_notifications_single_mail_summary">Oppsummering</string>
     <string name="debug_settings_notifications_single_mail_preview">Førehandsvising</string>
     <string name="debug_settings_notifications_common_notification_information">Felles notifikasjonsinformasjon</string>
+    <string name="debug_settings_notifications_in_app_notification">I app-notifikasjon</string>
+    <string name="debug_settings_notifications_title">Notifikasjonar</string>
+    <string name="debug_settings_notifications_system_notification">Systemnotifikasjon</string>
 </resources>

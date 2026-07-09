@@ -1,0 +1,146 @@
+---
+name: Release - Debug APK on Main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-debug-${{ github.repository }}-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-debug:
+    name: Bump, build, and publish debug APK
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !contains(github.event.head_commit.message, '[skip release]') &&
+        !startsWith(github.event.head_commit.message, 'chore(release):') &&
+        !startsWith(github.event.head_commit.message, 'Release:')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Gradle environment
+        uses: ./.github/actions/setup-gradle
+        with:
+          disable-cache: 'true'
+          add-job-summary: on-failure
+
+      - name: Bump version codes
+        id: version
+        shell: bash
+        run: |
+          bump_version_code() {
+            local file="$1"
+            local prefix="$2"
+            local old new
+            old=$(grep -E '^\s*versionCode\s*=' "$file" | head -1 | sed -E 's/.*= *//')
+            new=$((old + 1))
+            sed -i "s/versionCode = ${old}/versionCode = ${new}/" "$file"
+            echo "${prefix}_OLD_VERSION_CODE=${old}" >> "$GITHUB_OUTPUT"
+            echo "${prefix}_NEW_VERSION_CODE=${new}" >> "$GITHUB_OUTPUT"
+          }
+
+          bump_version_code app-thunderbird/build.gradle.kts THUNDERBIRD
+          bump_version_code app-k9mail/build.gradle.kts K9MAIL
+
+          tb_version_name=$(grep -E '^\s*versionName\s*=' app-thunderbird/build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          tb_new_version_code=$(grep -E '^\s*versionCode\s*=' app-thunderbird/build.gradle.kts | head -1 | sed -E 's/.*= *//')
+          full_version_name="${tb_version_name}-SNAPSHOT"
+          tag_version="${full_version_name//./_}"
+          tag_name="DEBUG_${tag_version}_${tb_new_version_code}"
+
+          {
+            echo "THUNDERBIRD_VERSION_NAME=${tb_version_name}"
+            echo "FULL_VERSION_NAME=${full_version_name}"
+            echo "TAG_NAME=${tag_name}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        id: commit
+        shell: bash
+        env:
+          TB_CODE: ${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }}
+          K9_CODE: ${{ steps.version.outputs.K9MAIL_NEW_VERSION_CODE }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add app-thunderbird/build.gradle.kts app-k9mail/build.gradle.kts
+          git commit -m "chore(release): bump version codes to TB ${TB_CODE} / K9 ${K9_CODE}"
+          git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build debug APKs
+        run: >-
+          ./gradlew
+          :app-thunderbird:assembleFossDebug
+          :app-k9mail:assembleFossDebug
+          -Pci=true
+          --no-build-cache
+          --no-configuration-cache
+
+      - name: Prepare release assets
+        shell: bash
+        env:
+          TB_CODE: ${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }}
+          K9_CODE: ${{ steps.version.outputs.K9MAIL_NEW_VERSION_CODE }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          tb_apk=$(find app-thunderbird/build/outputs/apk/foss/debug -name '*.apk' -type f | head -1)
+          k9_apk=$(find app-k9mail/build/outputs/apk/foss/debug -name '*.apk' -type f | head -1)
+
+          if [[ -z "${tb_apk}" || -z "${k9_apk}" ]]; then
+            echo "Expected debug APK outputs were not found."
+            find app-thunderbird/build/outputs -name '*.apk' -o -name '*.aab' || true
+            find app-k9mail/build/outputs -name '*.apk' -o -name '*.aab' || true
+            exit 1
+          fi
+
+          LATEST_BUILD_TOOLS=$(ls -d "${ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -n1)
+          AAPT="${LATEST_BUILD_TOOLS}/aapt"
+          apk_version_name() {
+            "${AAPT}" dump badging "$1" | sed -n "s/^package:.*versionName='\([^']*\)'.*$/\1/p"
+          }
+
+          tb_version_name=$(apk_version_name "${tb_apk}")
+          k9_version_name=$(apk_version_name "${k9_apk}")
+
+          cp "${tb_apk}" "release-assets/thunderbird-${tb_version_name}-debug-${TB_CODE}.apk"
+          cp "${k9_apk}" "release-assets/k9mail-${k9_version_name}-debug-${K9_CODE}.apk"
+
+          ls -l release-assets/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
+          name: Debug ${{ steps.version.outputs.FULL_VERSION_NAME }} (${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }})
+          target_commitish: ${{ steps.commit.outputs.sha }}
+          prerelease: true
+          fail_on_unmatched_files: true
+          body: |
+            Automated debug build from commit ${{ steps.commit.outputs.sha }}.
+
+            | App | Package | Version code |
+            | --- | --- | --- |
+            | Thunderbird | `net.thunderbird.android.debug` | ${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }} |
+            | K-9 Mail | `com.fsck.k9.debug` | ${{ steps.version.outputs.K9MAIL_NEW_VERSION_CODE }} |
+
+            These APKs are unsigned debug builds intended for testing. Install alongside store releases only when package IDs differ.
+          files: |
+            release-assets/*.apk

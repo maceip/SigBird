@@ -261,9 +261,11 @@ private class SignatureEditorBridge(
 }
 
 private fun buildEditorDocument(signatureHtml: String): String {
+    // Always sanitize before embedding into the isolated editor document.
     val bodyContent = when {
         signatureHtml.isBlank() -> ""
-        SignatureContent.isHtml(signatureHtml) -> signatureHtml
+        SignatureContent.isHtml(signatureHtml) ->
+            SignatureContent.sanitizeForStorage(signatureHtml).orEmpty()
         else -> signatureHtml
             .replace("&", "&amp;")
             .replace("<", "&lt;")

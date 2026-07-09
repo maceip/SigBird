@@ -144,7 +144,7 @@ internal class CompositionMailSettingsViewModel(
                             stripSignature = account.isStripSignature,
                             quotePrefix = account.quotePrefix.orEmpty(),
                             uploadSentMessages = account.isUploadSentMessages,
-                            supportsUploadSentMessages = true,
+                            supportsUploadSentMessages = !account.isIncomingServerPop3(),
                         )
                     }
                 },

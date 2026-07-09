@@ -15,7 +15,9 @@ android {
 
 dependencies {
     implementation(projects.library.htmlCleaner)
+    implementation(projects.legacy.core)
 
+    testImplementation(libs.assertk)
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

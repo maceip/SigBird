@@ -24,7 +24,7 @@ internal interface CompositionMailSettingsContract {
         val stripSignature: Boolean = true,
         val quotePrefix: String = "",
         val uploadSentMessages: Boolean = true,
-        val supportsUploadSentMessages: Boolean = true,
+        val supportsUploadSentMessages: Boolean = false,
     )
 
     sealed interface Event {

@@ -62,12 +62,7 @@ class EditIdentity : BaseActivity() {
         val accountUuid = intent.getStringExtra(EXTRA_ACCOUNT) ?: error("Missing account UUID")
         account = Preferences.getPreferences().getAccount(accountUuid) ?: error("Couldn't find account")
 
-        val initialIdentity = when {
-            savedInstanceState != null -> {
-                BundleCompat.getParcelable(savedInstanceState, EXTRA_IDENTITY, Identity::class.java)
-                    ?: error("Missing state")
-            }
-
+        val intentIdentity = when {
             identityIndex != -1 -> {
                 IntentCompat.getParcelableExtra(intent, EXTRA_IDENTITY, Identity::class.java)
                     ?: error("Missing argument")
@@ -75,6 +70,9 @@ class EditIdentity : BaseActivity() {
 
             else -> Identity()
         }
+        val initialIdentity = savedInstanceState?.let {
+            BundleCompat.getParcelable(it, EXTRA_IDENTITY, Identity::class.java)
+        } ?: intentIdentity
 
         setContent {
             themeProvider.WithTheme {

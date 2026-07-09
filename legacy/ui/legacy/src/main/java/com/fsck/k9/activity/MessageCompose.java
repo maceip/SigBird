@@ -505,6 +505,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
             signatureView = lowerSignature;
             upperSignature.setVisibility(View.GONE);
         }
+        signatureChanged = false;
         updateSignature();
         signatureView.addTextChangedListener(signTextWatcher);
 
@@ -1080,6 +1081,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         identityChanged = true;
         changesMadeSinceLastSave = true;
         updateFrom();
+        signatureChanged = false;
         updateSignature();
         updateMessageFormat();
         replyToPresenter.setIdentity(identity);
@@ -1114,7 +1116,6 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
                     : CrLfConverter.toLf(signature);
             signatureView.setText(displaySignature);
             signatureView.setVisibility(View.VISIBLE);
-            signatureChanged = false;
         } else {
             signatureView.setVisibility(View.GONE);
         }

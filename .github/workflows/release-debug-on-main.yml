@@ -42,13 +42,20 @@ jobs:
         id: version
         shell: bash
         run: |
+          set -euo pipefail
+
           bump_version_code() {
             local file="$1"
             local prefix="$2"
-            local old new
+            local old new updated
             old=$(grep -E '^\s*versionCode\s*=' "$file" | head -1 | sed -E 's/.*= *//')
             new=$((old + 1))
             sed -i "s/versionCode = ${old}/versionCode = ${new}/" "$file"
+            updated=$(grep -E '^\s*versionCode\s*=' "$file" | head -1 | sed -E 's/.*= *//')
+            if [[ "${updated}" != "${new}" ]]; then
+              echo "Failed to bump versionCode in ${file}" >&2
+              exit 1
+            fi
             echo "${prefix}_OLD_VERSION_CODE=${old}" >> "$GITHUB_OUTPUT"
             echo "${prefix}_NEW_VERSION_CODE=${new}" >> "$GITHUB_OUTPUT"
           }
@@ -80,6 +87,7 @@ jobs:
 
           git add app-thunderbird/build.gradle.kts app-k9mail/build.gradle.kts
           git commit -m "chore(release): bump version codes to TB ${TB_CODE} / K9 ${K9_CODE}"
+          git pull --rebase origin main
           git push
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 

@@ -4,6 +4,7 @@ import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Effect
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.State
+import com.fsck.k9.message.html.SignatureContent
 import com.fsck.k9.ui.R
 import kotlinx.collections.immutable.persistentListOf
 import net.thunderbird.core.android.account.LegacyAccount
@@ -61,7 +62,8 @@ class AccountSetupCompositionViewModel(
             }
 
             is Event.SignatureChange -> updateState { state ->
-                account = account.copy(signature = event.signature)
+                val sanitized = SignatureContent.sanitizeForStorage(event.signature)
+                account = account.copy(signature = sanitized)
                 state.copy(signature = account.signature ?: "")
             }
 

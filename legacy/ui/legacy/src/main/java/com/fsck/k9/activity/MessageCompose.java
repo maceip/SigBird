@@ -98,6 +98,7 @@ import com.fsck.k9.fragment.ProgressDialogFragment.CancelListener;
 import com.fsck.k9.helper.Contacts;
 import com.fsck.k9.helper.CrLfConverter;
 import com.fsck.k9.helper.IdentityHelper;
+import com.fsck.k9.message.html.SignatureContent;
 import com.fsck.k9.helper.MailTo;
 import com.fsck.k9.helper.ReplyToParser;
 import com.fsck.k9.helper.SimpleTextWatcher;
@@ -810,7 +811,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
                 .setText(CrLfConverter.toCrLf(messageContentView.getText()))
                 .setAttachments(attachmentPresenter.getAttachments())
                 .setInlineAttachments(attachmentPresenter.getInlineAttachments())
-                .setSignature(CrLfConverter.toCrLf(signatureView.getText()))
+                .setSignature(resolveSignatureForSend())
                 .setSignatureBeforeQuotedText(account.isSignatureBeforeQuotedText())
                 .setIdentityChanged(identityChanged)
                 .setSignatureChanged(signatureChanged)
@@ -1105,12 +1106,25 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
 
     private void updateSignature() {
         if (identity.getSignatureUse()) {
-            String signature = CrLfConverter.toLf(identity.getSignature());
-            signatureView.setText(signature);
+            String signature = identity.getSignature();
+            // HTML signatures are edited in identity settings; compose shows a plain preview.
+            // Unchanged HTML signatures are preserved on send via resolveSignatureForSend().
+            String displaySignature = SignatureContent.isHtml(signature)
+                    ? SignatureContent.toPlainText(signature)
+                    : CrLfConverter.toLf(signature);
+            signatureView.setText(displaySignature);
             signatureView.setVisibility(View.VISIBLE);
+            signatureChanged = false;
         } else {
             signatureView.setVisibility(View.GONE);
         }
+    }
+
+    private String resolveSignatureForSend() {
+        if (identity.getSignatureUse() && !signatureChanged && SignatureContent.isHtml(identity.getSignature())) {
+            return identity.getSignature();
+        }
+        return CrLfConverter.toCrLf(signatureView.getText());
     }
 
     @Override

@@ -30,7 +30,6 @@ import net.thunderbird.components.ui.bolt.atom.button.ButtonIcon
 import net.thunderbird.components.ui.bolt.atom.button.ButtonText
 import net.thunderbird.components.ui.bolt.atom.text.TextBodyLarge
 import net.thunderbird.components.ui.bolt.atom.text.TextBodySmall
-import net.thunderbird.components.ui.bolt.atom.textfield.TextFieldOutlined
 import net.thunderbird.components.ui.bolt.atom.textfield.TextFieldOutlinedEmailAddress
 import net.thunderbird.components.ui.bolt.molecule.input.TextInput
 import net.thunderbird.components.ui.bolt.organism.TopAppBar
@@ -39,6 +38,7 @@ import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Effect
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.BaseActivity
+import com.fsck.k9.ui.identity.SignatureHtmlEditor
 import kotlinx.collections.immutable.PersistentList
 import net.thunderbird.components.ui.bolt.atom.icon.Icons
 import net.thunderbird.components.ui.bolt.theme.BoltTheme
@@ -178,13 +178,9 @@ fun AccountSetupCompositionScreen(
                     TextBodySmall(text = stringResource(R.string.account_settings_signature_use_label))
                 }
                 if (useSignature) {
-                    TextFieldOutlined(
-                        label = stringResource(id = R.string.account_settings_signature_label),
-                        value = signature,
-                        onValueChange = { onEvent(Event.SignatureChange(it)) },
-                        modifier = Modifier
-                            .padding(horizontal = BoltTheme.spacings.double)
-                            .fillMaxWidth(),
+                    SignatureHtmlEditor(
+                        html = signature,
+                        onHtmlChange = { onEvent(Event.SignatureChange(it)) },
                     )
                     Spacer(modifier = Modifier.height(BoltTheme.spacings.half))
                     TextBodyLarge(

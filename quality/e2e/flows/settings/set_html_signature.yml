@@ -1,0 +1,48 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Enable signature and enter HTML-capable signature text in Composition defaults
+#
+# Required env vars:
+#   - SIGNATURE_TEXT: plain text typed into the WYSIWYG editor
+#
+# Assumes Composition defaults screen is already open.
+
+## Enable Use Signature if editor is not visible
+- runFlow:
+    when:
+      notVisible:
+        id: "signature_html_editor"
+    commands:
+      - tapOn:
+          id: "composition_use_signature_row"
+
+## Verify WYSIWYG editor is shown
+- assertVisible:
+    id: "signature_html_editor"
+- assertVisible:
+    id: "signature_editor_bold"
+- assertVisible:
+    id: "signature_editor_italic"
+- assertVisible:
+    id: "signature_editor_underline"
+
+## Focus editor and enter signature text
+- tapOn:
+    id: "signature_html_editor_webview"
+- eraseText
+- inputText: ${SIGNATURE_TEXT}
+
+## Apply basic formatting supported by modern clients
+- tapOn:
+    id: "signature_editor_bold"
+
+## Save composition defaults
+- tapOn:
+    id: "composition_defaults_save"
+
+## Leave settings back to mail list
+- tapOn: "Navigate up"
+- tapOn: "Navigate up"
+- tapOn: "Navigate up"
+- swipe:
+    direction: LEFT

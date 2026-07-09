@@ -40,6 +40,10 @@ class HtmlSignatureRemover {
 
             if (node.isBlockquote()) {
                 return HeadFilterDecision.SKIP_ENTIRELY
+            } else if (node.isSignatureElement()) {
+                signatureFound = true
+                signatureParentNode = node.parent()
+                return HeadFilterDecision.REMOVE
             } else if (node.isSignatureDelimiter()) {
                 val precedingLineBreak = node.findPrecedingLineBreak()
                 if (precedingLineBreak != null && node.isFollowedByLineBreak()) {
@@ -76,6 +80,14 @@ class HtmlSignatureRemover {
 
         private fun Node.isSignatureDelimiter(): Boolean {
             return this is TextNode && DASH_SIGNATURE_HTML.matcher(wholeText).matches()
+        }
+
+        private fun Node.isSignatureElement(): Boolean {
+            if (this !is Element) return false
+            val className = attr("class").lowercase()
+            return className.contains("k9mail-signature") ||
+                className.contains("__signature") ||
+                className.split(Regex("\\s+")).any { it == "signature" }
         }
 
         private fun Node.findPrecedingLineBreak(): Node? {

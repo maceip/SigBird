@@ -5,6 +5,7 @@ import net.thunderbird.core.logging.legacy.Log;
 
 import com.fsck.k9.K9;
 import com.fsck.k9.message.html.HtmlConverter;
+import com.fsck.k9.message.html.SignatureContent;
 import com.fsck.k9.mail.Body;
 import com.fsck.k9.mail.internet.TextBody;
 import com.fsck.k9.message.quote.InsertableHtmlContent;
@@ -182,7 +183,7 @@ class TextBodyBuilder {
     private String getSignature() {
         String signature = "";
         if (!isEmpty(mSignature)) {
-            signature = "\r\n" + mSignature;
+            signature = "\r\n" + SignatureContent.toPlainText(mSignature);
         }
 
         return signature;
@@ -191,7 +192,7 @@ class TextBodyBuilder {
     private String getSignatureHtml() {
         String signature = "";
         if (!isEmpty(mSignature)) {
-            signature = HtmlConverter.textToHtmlFragment(mSignature);
+            signature = SignatureContent.toHtmlFragment(mSignature);
         }
         return signature;
     }

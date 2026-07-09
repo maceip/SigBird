@@ -27,6 +27,7 @@ import com.fsck.k9.mail.internet.Viewable;
 import com.fsck.k9.mailstore.CryptoResultAnnotation.CryptoError;
 import com.fsck.k9.message.extractors.AttachmentInfoExtractor;
 import com.fsck.k9.message.html.HtmlConverter;
+import com.fsck.k9.message.signature.HtmlSignatureDeduplicator;
 import app.k9mail.html.cleaner.HtmlProcessor;
 import org.openintents.openpgp.util.OpenPgpUtils;
 import net.thunderbird.core.logging.legacy.Log;
@@ -244,8 +245,11 @@ public class MessageViewInfoExtractor {
             }
 
             String sanitizedHtml = htmlProcessor.processForDisplay(html.toString());
+            // Keep a single signature in the displayed body even when quoted replies
+            // repeat the same signature throughout a thread.
+            String displayHtml = HtmlSignatureDeduplicator.deduplicate(sanitizedHtml);
 
-            return new ViewableExtractedText(text.toString(), sanitizedHtml);
+            return new ViewableExtractedText(text.toString(), displayHtml);
         } catch (Exception e) {
             throw new MessagingException("Couldn't extract viewable parts", e);
         }

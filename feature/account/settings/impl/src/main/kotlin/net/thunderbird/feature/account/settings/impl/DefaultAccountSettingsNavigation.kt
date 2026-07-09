@@ -6,6 +6,7 @@ import net.thunderbird.core.ui.navigation.deepLinkComposable
 import net.thunderbird.feature.account.AccountIdFactory
 import net.thunderbird.feature.account.settings.api.AccountSettingsNavigation
 import net.thunderbird.feature.account.settings.api.AccountSettingsRoute
+import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.FetchingMailSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.advanced.AdvancedFetchingMailSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.general.GeneralSettingsScreen
@@ -71,6 +72,21 @@ internal class DefaultAccountSettingsNavigation : AccountSettingsNavigation {
                 val accountId = AccountIdFactory.of(advancedFetchingMailSettingsRoute.accountId)
 
                 AdvancedFetchingMailSettingsScreen(
+                    accountId = accountId,
+                    onBack = onBack,
+                )
+            }
+        }
+
+        with(navGraphBuilder) {
+            deepLinkComposable<AccountSettingsRoute.CompositionMailSettings>(
+                basePath = AccountSettingsRoute.CompositionMailSettings.BASE_PATH,
+            ) { backStackEntry ->
+                val compositionMailSettingsRoute =
+                    backStackEntry.toRoute<AccountSettingsRoute.CompositionMailSettings>()
+                val accountId = AccountIdFactory.of(compositionMailSettingsRoute.accountId)
+
+                CompositionMailSettingsScreen(
                     accountId = accountId,
                     onBack = onBack,
                 )

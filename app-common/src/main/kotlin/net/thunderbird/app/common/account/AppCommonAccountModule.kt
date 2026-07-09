@@ -18,6 +18,7 @@ import net.thunderbird.feature.account.avatar.DefaultAvatarIconCatalog
 import net.thunderbird.feature.account.avatar.DefaultAvatarMonogramCreator
 import net.thunderbird.feature.account.core.AccountCoreExternalContract.AccountProfileLocalDataSource
 import net.thunderbird.feature.account.core.featureAccountCoreModule
+import net.thunderbird.feature.account.settings.api.AccountSettingsLegacyNavigation
 import net.thunderbird.feature.account.storage.legacy.featureAccountStorageLegacyModule
 import net.thunderbird.feature.mail.account.api.AccountManager
 import org.koin.android.ext.koin.androidApplication
@@ -32,6 +33,10 @@ internal val appCommonAccountModule = module {
         featureAccountCoreModule,
         featureAccountStorageLegacyModule,
     )
+
+    single<AccountSettingsLegacyNavigation> {
+        DefaultAccountSettingsLegacyNavigation()
+    }
 
     single<AccountManager<LegacyAccount>> {
         DefaultLegacyAccountManager(

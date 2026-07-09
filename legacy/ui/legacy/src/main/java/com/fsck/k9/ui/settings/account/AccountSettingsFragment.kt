@@ -96,13 +96,8 @@ class AccountSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFr
         initializeGeneralSettings()
         initializeReadingMail()
         initializeFetchingMail()
+        initializeCompositionMail()
         initializeSearch()
-        initializeIncomingServer()
-        initializeComposition()
-        initializeManageIdentities()
-        initializeUploadSentMessages(account)
-        initializeOutgoingServer()
-        initializeQuoteStyle()
         initializeDeletePolicy(account)
         initializeExpungePolicy(account)
         initializeMessageAge(account)
@@ -195,6 +190,16 @@ class AccountSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFr
             FeatureLauncherActivity.launch(
                 context = requireActivity(),
                 target = FeatureLauncherTarget.AccountSearchSettings(accountUuid),
+                launcher = launcherForActivityResult,
+            )
+        }
+    }
+
+    private fun initializeCompositionMail() {
+        findPreference<Preference>(PREFERENCE_COMPOSING)?.onClick {
+            FeatureLauncherActivity.launch(
+                context = requireActivity(),
+                target = FeatureLauncherTarget.AccountCompositionMailSettings(accountUuid),
                 launcher = launcherForActivityResult,
             )
         }
@@ -525,6 +530,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFr
         private const val PREFERENCE_FETCHING_MAIL = "fetching_mail"
         private const val PREFERENCE_SEARCH = "search"
         private const val PREFERENCE_INCOMING_SERVER = "incoming"
+        private const val PREFERENCE_COMPOSING = "composing"
         private const val PREFERENCE_COMPOSITION = "composition"
         private const val PREFERENCE_MANAGE_IDENTITIES = "manage_identities"
         private const val PREFERENCE_OUTGOING_SERVER = "outgoing"

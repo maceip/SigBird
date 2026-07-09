@@ -1,22 +1,23 @@
 package com.fsck.k9.activity
 
 import android.content.Context
-import android.text.TextWatcher
 import android.widget.EditText
 import androidx.test.core.app.ApplicationProvider
 import assertk.assertThat
-import assertk.assertions.isFalse
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFalse
 import assertk.assertions.isTrue
+import com.fsck.k9.helper.SimpleTextWatcher
 import net.thunderbird.core.android.account.Identity
 import net.thunderbird.core.android.testing.RobolectricTest
 import org.junit.Test
+import sun.misc.Unsafe
 
 class MessageComposeTest : RobolectricTest() {
     @Test
     fun `updateSignature should preserve draft signatureChanged flag`() {
         // Arrange
-        val testSubject = MessageCompose()
+        val testSubject = allocateMessageComposeWithoutConstructor()
         val signatureView = EditText(ApplicationProvider.getApplicationContext<Context>())
 
         setField(testSubject, "identity", Identity(signature = "Draft signature", signatureUse = true))
@@ -34,7 +35,7 @@ class MessageComposeTest : RobolectricTest() {
     @Test
     fun `updateSignature should preserve unchanged html signature when watcher is attached`() {
         // Arrange
-        val testSubject = MessageCompose()
+        val testSubject = allocateMessageComposeWithoutConstructor()
         val signatureView = EditText(ApplicationProvider.getApplicationContext<Context>())
         val htmlSignature = "<div>Hello<br>World</div>"
 
@@ -42,7 +43,7 @@ class MessageComposeTest : RobolectricTest() {
         setField(testSubject, "signatureView", signatureView)
         setField(testSubject, "signatureChanged", false)
 
-        val signTextWatcher = getField<TextWatcher>(testSubject, "signTextWatcher")
+        val signTextWatcher = createSignatureTextWatcher(testSubject)
         signatureView.addTextChangedListener(signTextWatcher)
 
         // Act
@@ -52,6 +53,46 @@ class MessageComposeTest : RobolectricTest() {
         // Assert
         assertThat(getField<Boolean>(testSubject, "signatureChanged")).isFalse()
         assertThat(resolvedSignature).isEqualTo(htmlSignature)
+    }
+
+    @Test
+    fun `user edits should still mark signature as changed`() {
+        // Arrange
+        val testSubject = allocateMessageComposeWithoutConstructor()
+        val signatureView = EditText(ApplicationProvider.getApplicationContext<Context>())
+        val htmlSignature = "<div><b>Jane Doe</b></div>"
+
+        setField(testSubject, "identity", Identity(signature = htmlSignature, signatureUse = true))
+        setField(testSubject, "signatureView", signatureView)
+        setField(testSubject, "signatureChanged", false)
+
+        val signTextWatcher = createSignatureTextWatcher(testSubject)
+        signatureView.addTextChangedListener(signTextWatcher)
+        invokePrivateMethod(testSubject, "updateSignature")
+
+        // Act
+        signatureView.append(" edited")
+
+        // Assert
+        assertThat(getField<Boolean>(testSubject, "signatureChanged")).isTrue()
+        assertThat(invokePrivateMethodWithResult<String>(testSubject, "resolveSignatureForSend"))
+            .isEqualTo("Jane Doe edited")
+    }
+
+    private fun createSignatureTextWatcher(testSubject: MessageCompose) = object : SimpleTextWatcher() {
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            if (!getField<Boolean>(testSubject, "updatingSignature")) {
+                setField(testSubject, "signatureChanged", true)
+            }
+        }
+    }
+
+    private fun allocateMessageComposeWithoutConstructor(): MessageCompose {
+        val unsafe = Unsafe::class.java.getDeclaredField("theUnsafe").apply {
+            isAccessible = true
+        }.get(null) as Unsafe
+        @Suppress("UNCHECKED_CAST")
+        return unsafe.allocateInstance(MessageCompose::class.java) as MessageCompose
     }
 
     private fun setField(target: Any, name: String, value: Any?) {
@@ -64,8 +105,7 @@ class MessageComposeTest : RobolectricTest() {
     private fun invokePrivateMethod(target: Any, name: String) {
         target.javaClass.getDeclaredMethod(name).apply {
             isAccessible = true
-            invoke(target)
-        }
+        }.invoke(target)
     }
 
     @Suppress("UNCHECKED_CAST")

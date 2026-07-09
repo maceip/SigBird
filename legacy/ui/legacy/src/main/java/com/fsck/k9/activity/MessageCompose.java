@@ -259,6 +259,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     private Identity identity;
     private boolean identityChanged = false;
     private boolean signatureChanged = false;
+    private boolean updatingSignature = false;
 
     // relates to the message being replied to, forwarded, or edited TODO split up?
     private MessageReference relatedMessageReference;
@@ -287,6 +288,15 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     private MaterialTextView chooseIdentityView;
     private EditText subjectView;
     private EditText signatureView;
+    private final TextWatcher signTextWatcher = new SimpleTextWatcher() {
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+            changesMadeSinceLastSave = true;
+            if (!updatingSignature) {
+                signatureChanged = true;
+            }
+        }
+    };
     private EditText messageContentView;
     private LinearLayout attachmentsView;
 
@@ -395,14 +405,6 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 changesMadeSinceLastSave = true;
-            }
-        };
-
-        TextWatcher signTextWatcher = new SimpleTextWatcher() {
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                changesMadeSinceLastSave = true;
-                signatureChanged = true;
             }
         };
 
@@ -1114,7 +1116,12 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
             String displaySignature = SignatureContent.isHtml(signature)
                     ? SignatureContent.toPlainText(signature)
                     : CrLfConverter.toLf(signature);
-            signatureView.setText(displaySignature);
+            updatingSignature = true;
+            try {
+                signatureView.setText(displaySignature);
+            } finally {
+                updatingSignature = false;
+            }
             signatureView.setVisibility(View.VISIBLE);
         } else {
             signatureView.setVisibility(View.GONE);

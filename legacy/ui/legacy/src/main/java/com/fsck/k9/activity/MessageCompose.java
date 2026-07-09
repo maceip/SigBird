@@ -66,6 +66,7 @@ import kotlin.Unit;
 import net.thunderbird.core.android.account.LegacyAccountDto;
 import app.k9mail.legacy.di.DI;
 import net.thunderbird.core.android.account.Identity;
+import com.fsck.k9.FontSizes;
 import com.fsck.k9.K9;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.activity.MessageLoaderHelper.MessageLoaderCallbacks;
@@ -98,7 +99,8 @@ import com.fsck.k9.fragment.ProgressDialogFragment.CancelListener;
 import com.fsck.k9.helper.Contacts;
 import com.fsck.k9.helper.CrLfConverter;
 import com.fsck.k9.helper.IdentityHelper;
-import com.fsck.k9.message.html.SignatureContent;
+import app.k9mail.library.signatureeditor.SignatureEditorView;
+import app.k9mail.library.signatureeditor.SignatureStorage;
 import com.fsck.k9.helper.MailTo;
 import com.fsck.k9.helper.ReplyToParser;
 import com.fsck.k9.helper.SimpleTextWatcher;
@@ -287,14 +289,11 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
 
     private MaterialTextView chooseIdentityView;
     private EditText subjectView;
-    private EditText signatureView;
-    private final TextWatcher signTextWatcher = new SimpleTextWatcher() {
-        @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {
-            changesMadeSinceLastSave = true;
-            if (!updatingSignature) {
-                signatureChanged = true;
-            }
+    private SignatureEditorView signatureView;
+    private final SignatureEditorView.OnSignatureChangeListener signChangeListener = () -> {
+        changesMadeSinceLastSave = true;
+        if (!updatingSignature) {
+            signatureChanged = true;
         }
     };
     private EditText messageContentView;
@@ -384,10 +383,8 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         subjectView.getInputExtras(true).putBoolean("allowEmoji", true);
         applyIncognitoKeyboardSetting(subjectView);
 
-        EditText upperSignature = findViewById(R.id.upper_signature);
-        EditText lowerSignature = findViewById(R.id.lower_signature);
-        applyIncognitoKeyboardSetting(upperSignature);
-        applyIncognitoKeyboardSetting(lowerSignature);
+        SignatureEditorView upperSignature = findViewById(R.id.upper_signature);
+        SignatureEditorView lowerSignature = findViewById(R.id.lower_signature);
 
 
         QuotedMessageMvpView quotedMessageMvpView = new QuotedMessageMvpView(this);
@@ -509,7 +506,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         }
         signatureChanged = false;
         updateSignature();
-        signatureView.addTextChangedListener(signTextWatcher);
+        signatureView.setOnSignatureChangeListener(signChangeListener);
 
         if (!identity.getSignatureUse()) {
             signatureView.setVisibility(View.GONE);
@@ -559,7 +556,9 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         if(generalSettingsManager.getConfig().getDisplay().getVisualSettings().isUseMessageViewFixedWidthFont())
             messageContentView.setTypeface(Typeface.MONOSPACE);
         K9.getFontSizes().setViewTextSize(messageContentView, fontSize);
-        K9.getFontSizes().setViewTextSize(signatureView, fontSize);
+        if (fontSize != FontSizes.FONT_DEFAULT) {
+            signatureView.setFontSizeSp(fontSize);
+        }
 
 
         updateMessageFormat();
@@ -1111,14 +1110,9 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     private void updateSignature() {
         if (identity.getSignatureUse()) {
             String signature = identity.getSignature();
-            // HTML signatures are edited in identity settings; compose shows a plain preview.
-            // Unchanged HTML signatures are preserved on send via resolveSignatureForSend().
-            String displaySignature = SignatureContent.isHtml(signature)
-                    ? SignatureContent.toPlainText(signature)
-                    : CrLfConverter.toLf(signature);
             updatingSignature = true;
             try {
-                signatureView.setText(displaySignature);
+                signatureView.setSignature(signature);
             } finally {
                 updatingSignature = false;
             }
@@ -1129,10 +1123,14 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     }
 
     private String resolveSignatureForSend() {
-        if (identity.getSignatureUse() && !signatureChanged && SignatureContent.isHtml(identity.getSignature())) {
+        if (identity.getSignatureUse() && !signatureChanged && SignatureStorage.isHtml(identity.getSignature())) {
             return identity.getSignature();
         }
-        return CrLfConverter.toCrLf(signatureView.getText());
+        String signatureHtml = signatureView.getSignatureHtml();
+        if (SignatureStorage.isHtml(signatureHtml)) {
+            return signatureHtml;
+        }
+        return CrLfConverter.toCrLf(signatureView.getSignaturePlainText());
     }
 
     @Override

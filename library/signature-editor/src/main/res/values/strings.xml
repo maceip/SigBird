@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signature_editor_label">Signature</string>
+    <string name="signature_editor_link_label">Link URL</string>
+    <string name="signature_editor_save">Save</string>
+</resources>

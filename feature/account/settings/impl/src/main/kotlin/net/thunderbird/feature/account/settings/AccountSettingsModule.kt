@@ -9,12 +9,17 @@ import net.thunderbird.feature.account.settings.impl.domain.usecase.GetAccountNa
 import net.thunderbird.feature.account.settings.impl.domain.usecase.GetAccountProfile
 import net.thunderbird.feature.account.settings.impl.domain.usecase.GetLegacyAccount
 import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateAvatarImage
+import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateCompositionMailSettings
 import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateFetchingMailSettings
 import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateGeneralSettings
 import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateReadEmailSettings
 import net.thunderbird.feature.account.settings.impl.domain.usecase.UpdateSearchSettings
 import net.thunderbird.feature.account.settings.impl.domain.usecase.ValidateAccountName
 import net.thunderbird.feature.account.settings.impl.domain.usecase.ValidateAvatarMonogram
+import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsBuilder
+import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsContract
+import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsOptionsMapper
+import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsViewModel
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.FetchingMailSettingsBuilder
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.FetchingMailSettingsContract
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.FetchingMailSettingsOptionsMapper
@@ -44,6 +49,12 @@ val featureAccountSettingsModule = module {
 
     factory<UseCase.UpdateReadMailSettings> {
         UpdateReadEmailSettings(
+            repository = get(),
+        )
+    }
+
+    factory<UseCase.UpdateCompositionMailSettings> {
+        UpdateCompositionMailSettings(
             repository = get(),
         )
     }
@@ -117,6 +128,30 @@ val featureAccountSettingsModule = module {
     factory<ReadingMailSettingsContract.SettingsBuilder> {
         ReadingMailSettingsBuilder(
             resources = get<StringsResourceManager>(),
+        )
+    }
+
+    factory<CompositionMailSettingsOptionsMapper> {
+        CompositionMailSettingsOptionsMapper(
+            resources = get<StringsResourceManager>(),
+        )
+    }
+
+    factory<CompositionMailSettingsContract.SettingsBuilder> {
+        CompositionMailSettingsBuilder(
+            resources = get<StringsResourceManager>(),
+            optionsMapper = get(),
+        )
+    }
+
+    viewModel { params ->
+        CompositionMailSettingsViewModel(
+            accountId = params.get(),
+            getAccountName = get(),
+            getLegacyAccount = get(),
+            updateCompositionMailSettings = get(),
+            resources = get(),
+            logger = get(),
         )
     }
 

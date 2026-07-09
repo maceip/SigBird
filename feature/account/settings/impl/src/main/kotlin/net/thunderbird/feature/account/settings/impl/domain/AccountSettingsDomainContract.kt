@@ -52,6 +52,13 @@ internal interface AccountSettingsDomainContract {
             ): Outcome<Unit, AccountSettingError>
         }
 
+        fun interface UpdateCompositionMailSettings {
+            suspend operator fun invoke(
+                accountId: AccountId,
+                command: UpdateCompositionMailSettingsCommand,
+            ): Outcome<Unit, AccountSettingError>
+        }
+
         fun interface UpdateAvatarImage {
             suspend operator fun invoke(
                 accountId: AccountId,
@@ -94,6 +101,18 @@ internal interface AccountSettingsDomainContract {
         data class UpdateExpungePolicy(val value: String) : UpdateFetchingMailSettingsCommand
         data class UpdateMaxPushFolders(val value: Int) : UpdateFetchingMailSettingsCommand
         data class UpdateIdleRefreshMinutes(val value: Int) : UpdateFetchingMailSettingsCommand
+    }
+
+    sealed interface UpdateCompositionMailSettingsCommand {
+        data class UpdateMessageFormat(val value: String) : UpdateCompositionMailSettingsCommand
+        data class UpdateAlwaysShowCcBcc(val value: Boolean) : UpdateCompositionMailSettingsCommand
+        data class UpdateMessageReadReceipt(val value: Boolean) : UpdateCompositionMailSettingsCommand
+        data class UpdateQuoteStyle(val value: String) : UpdateCompositionMailSettingsCommand
+        data class UpdateDefaultQuotedTextShown(val value: Boolean) : UpdateCompositionMailSettingsCommand
+        data class UpdateReplyAfterQuote(val value: Boolean) : UpdateCompositionMailSettingsCommand
+        data class UpdateStripSignature(val value: Boolean) : UpdateCompositionMailSettingsCommand
+        data class UpdateQuotePrefix(val value: String) : UpdateCompositionMailSettingsCommand
+        data class UpdateUploadSentMessages(val value: Boolean) : UpdateCompositionMailSettingsCommand
     }
 
     sealed interface AccountSettingError {

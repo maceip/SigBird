@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.ckchangelog.core)
     implementation(projects.library.tokenAutoComplete)
+    implementation(projects.library.signatureEditor)
     implementation(libs.safeContentResolver)
     implementation(libs.searchPreference)
     implementation(libs.fastadapter)

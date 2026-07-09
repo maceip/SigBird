@@ -60,6 +60,17 @@ sealed interface AccountSettingsRoute : Route {
         }
     }
 
+    @Serializable
+    data class CompositionMailSettings(val accountId: String) : AccountSettingsRoute {
+        override val basePath: String = BASE_PATH
+
+        override fun route(): String = "$basePath/$accountId"
+
+        companion object {
+            const val BASE_PATH = "$ACCOUNT_SETTINGS_BASE_PATH/composition"
+        }
+    }
+
     companion object {
         const val ACCOUNT_SETTINGS_BASE_PATH = "app://account/settings"
     }

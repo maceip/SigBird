@@ -280,6 +280,7 @@ include(
 
 include(
     ":library:html-cleaner",
+    ":library:signature-editor",
     ":library:token-auto-complete",
 )
 

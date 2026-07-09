@@ -38,6 +38,9 @@ dependencies {
     implementation(libs.uri)
 
     implementation(projects.feature.launcher)
+    implementation(projects.feature.notification.api)
+    implementation(projects.feature.mail.folder.api)
+    implementation(projects.feature.account.profile.api)
 
     debugImplementation(projects.core.ui.setting.implDialog)
 

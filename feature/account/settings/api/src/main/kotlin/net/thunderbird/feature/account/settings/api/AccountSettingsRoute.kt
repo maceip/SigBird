@@ -6,6 +6,17 @@ import net.thunderbird.core.ui.navigation.Route
 sealed interface AccountSettingsRoute : Route {
 
     @Serializable
+    data class Hub(val accountId: String) : AccountSettingsRoute {
+        override val basePath: String = BASE_PATH
+
+        override fun route(): String = "$basePath/$accountId"
+
+        companion object {
+            const val BASE_PATH = ACCOUNT_SETTINGS_BASE_PATH
+        }
+    }
+
+    @Serializable
     data class GeneralSettings(val accountId: String) : AccountSettingsRoute {
         override val basePath: String = BASE_PATH
 
@@ -68,6 +79,39 @@ sealed interface AccountSettingsRoute : Route {
 
         companion object {
             const val BASE_PATH = "$ACCOUNT_SETTINGS_BASE_PATH/composition"
+        }
+    }
+
+    @Serializable
+    data class FolderSettings(val accountId: String) : AccountSettingsRoute {
+        override val basePath: String = BASE_PATH
+
+        override fun route(): String = "$basePath/$accountId"
+
+        companion object {
+            const val BASE_PATH = "$ACCOUNT_SETTINGS_BASE_PATH/folders"
+        }
+    }
+
+    @Serializable
+    data class NotificationSettings(val accountId: String) : AccountSettingsRoute {
+        override val basePath: String = BASE_PATH
+
+        override fun route(): String = "$basePath/$accountId"
+
+        companion object {
+            const val BASE_PATH = "$ACCOUNT_SETTINGS_BASE_PATH/notifications"
+        }
+    }
+
+    @Serializable
+    data class CryptoSettings(val accountId: String) : AccountSettingsRoute {
+        override val basePath: String = BASE_PATH
+
+        override fun route(): String = "$basePath/$accountId"
+
+        companion object {
+            const val BASE_PATH = "$ACCOUNT_SETTINGS_BASE_PATH/crypto"
         }
     }
 

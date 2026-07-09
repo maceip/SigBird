@@ -7,8 +7,8 @@ import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
-import com.fsck.k9.ui.settings.account.AccountSettingsActivity
-import com.fsck.k9.ui.settings.account.AccountSettingsFragment
+import app.k9mail.feature.launcher.FeatureLauncherActivity
+import app.k9mail.feature.launcher.FeatureLauncherTarget
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.collections.immutable.persistentSetOf
 import net.thunderbird.core.logging.Logger
@@ -89,10 +89,9 @@ class MessageComposeInAppNotificationFragment : Fragment() {
         logger.verbose(TAG) { "onNotificationActionClick() called with: action = $action" }
         when (action) {
             is NotificationAction.AssignSentFolder ->
-                AccountSettingsActivity.start(
+                FeatureLauncherActivity.launch(
                     context = requireContext(),
-                    accountUuid = action.accountUuid,
-                    startScreenKey = AccountSettingsFragment.PREFERENCE_FOLDERS,
+                    target = FeatureLauncherTarget.AccountFolderSettings(action.accountUuid),
                 )
 
             else -> Unit

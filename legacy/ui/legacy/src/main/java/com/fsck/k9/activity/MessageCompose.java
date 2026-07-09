@@ -60,8 +60,8 @@ import app.k9mail.core.ui.legacy.designsystem.atom.icon.Icons;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.fsck.k9.activity.compose.MessageComposeInAppNotificationFragment;
-import com.fsck.k9.ui.settings.account.AccountSettingsActivity;
-import com.fsck.k9.ui.settings.account.AccountSettingsFragment;
+import app.k9mail.feature.launcher.FeatureLauncherActivity;
+import app.k9mail.feature.launcher.FeatureLauncherTarget;
 import kotlin.Unit;
 import net.thunderbird.core.android.account.LegacyAccountDto;
 import app.k9mail.legacy.di.DI;
@@ -591,9 +591,12 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
             (requestKey, result) -> {
                 if (RESULT_CODE_ASSIGN_SENT_FOLDER_REQUEST_KEY.equals(requestKey)) {
                     final String accountUuid = result.getString(ACCOUNT_UUID_ARG);
-                    AccountSettingsActivity.start(this,
-                        Objects.requireNonNull(accountUuid),
-                        AccountSettingsFragment.PREFERENCE_FOLDERS);
+                    FeatureLauncherActivity.launch(
+                        this,
+                        new FeatureLauncherTarget.AccountFolderSettings(
+                            Objects.requireNonNull(accountUuid)
+                        )
+                    );
                 }
             }
         );

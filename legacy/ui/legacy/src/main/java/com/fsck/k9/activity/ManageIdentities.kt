@@ -23,7 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import com.fsck.k9.Preferences
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.BaseActivity
@@ -95,6 +98,7 @@ class ManageIdentities : BaseActivity() {
                     onMoveDown = { index -> moveIdentity(index, index + 1) },
                     onMakeDefault = { index -> moveIdentity(index, 0) },
                     onRemove = { index -> removeIdentity(index) },
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
                 )
             }
         }
@@ -160,8 +164,10 @@ private fun ManageIdentitiesScreen(
     onMoveDown: (Int) -> Unit,
     onMakeDefault: (Int) -> Unit,
     onRemove: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Scaffold(
+        modifier = modifier.testTag("manage_identities_screen"),
         topBar = {
             TopAppBar(
                 title = stringResource(R.string.manage_identities_title),
@@ -175,6 +181,7 @@ private fun ManageIdentitiesScreen(
                     ButtonIcon(
                         onClick = onAdd,
                         imageVector = Icons.Outlined.Add,
+                        modifier = Modifier.testTag("manage_identities_add"),
                     )
                 },
             )
@@ -186,7 +193,9 @@ private fun ManageIdentitiesScreen(
                 .padding(innerPadding),
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("manage_identities_list"),
                 contentPadding = PaddingValues(vertical = BoltTheme.spacings.default),
                 verticalArrangement = Arrangement.spacedBy(BoltTheme.spacings.half),
             ) {
@@ -203,6 +212,7 @@ private fun ManageIdentitiesScreen(
                         onMoveDown = { onMoveDown(index) },
                         onMakeDefault = { onMakeDefault(index) },
                         onRemove = { onRemove(index) },
+                        modifier = Modifier.testTag("manage_identities_item_$index"),
                     )
                 }
             }
@@ -223,11 +233,12 @@ private fun IdentityListItem(
     onMoveDown: () -> Unit,
     onMakeDefault: () -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var showActions by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = BoltTheme.spacings.double, vertical = BoltTheme.spacings.default),

@@ -20,7 +20,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.IntentCompat
 import androidx.core.os.BundleCompat
@@ -83,6 +86,7 @@ class EditIdentity : BaseActivity() {
                         saveIdentity(identity)
                         finish()
                     },
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
                 )
             }
         }
@@ -117,6 +121,7 @@ private fun EditIdentityScreen(
     emailAddressValidator: EmailAddressValidator,
     onBack: () -> Unit,
     onSave: (Identity) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var description by rememberSaveable { mutableStateOf(initialIdentity.description.orEmpty()) }
     var name by rememberSaveable { mutableStateOf(initialIdentity.name.orEmpty()) }
@@ -131,6 +136,7 @@ private fun EditIdentityScreen(
     }
 
     Scaffold(
+        modifier = modifier.testTag("edit_identity_screen"),
         topBar = {
             TopAppBar(
                 title = stringResource(R.string.edit_identity_title),
@@ -156,6 +162,7 @@ private fun EditIdentityScreen(
                             )
                         },
                         text = stringResource(R.string.edit_identity_save),
+                        modifier = Modifier.testTag("edit_identity_save"),
                     )
                 },
             )
@@ -199,6 +206,7 @@ private fun EditIdentityScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("edit_identity_use_signature_row")
                         .clickable { useSignature = !useSignature }
                         .padding(horizontal = BoltTheme.spacings.double),
                     verticalAlignment = Alignment.CenterVertically,
@@ -206,6 +214,7 @@ private fun EditIdentityScreen(
                     Checkbox(
                         checked = useSignature,
                         onCheckedChange = { useSignature = it },
+                        modifier = Modifier.testTag("edit_identity_use_signature"),
                     )
                     TextBodySmall(
                         text = stringResource(R.string.account_settings_signature_use_label),
@@ -216,6 +225,7 @@ private fun EditIdentityScreen(
                     SignatureHtmlEditor(
                         html = signature,
                         onHtmlChange = { signature = it },
+                        modifier = Modifier.testTag("edit_identity_signature_editor"),
                     )
                 }
             }

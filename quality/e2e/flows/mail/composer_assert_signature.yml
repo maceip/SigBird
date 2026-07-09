@@ -1,0 +1,14 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Assert the compose screen shows the configured signature preview
+#
+# Required env vars:
+#   - SIGNATURE_TEXT: expected signature preview text
+#
+# Assumes compose screen is open.
+# Default account setting places the signature after quoted text (lower_signature).
+
+## Signature preview is visible (plain-text preview of HTML signature)
+- assertVisible:
+    id: "lower_signature"
+    text: ".*${SIGNATURE_TEXT}.*"

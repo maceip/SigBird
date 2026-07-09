@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -70,7 +71,7 @@ fun SignatureHtmlEditor(
         )
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().testTag("signature_html_editor")) {
         TextBodySmall(
             text = stringResource(R.string.edit_identity_signature_label),
             modifier = Modifier.padding(horizontal = BoltTheme.spacings.double),
@@ -95,13 +96,17 @@ fun SignatureHtmlEditor(
                 AndroidView(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = EDITOR_MIN_HEIGHT_DP.dp),
+                        .heightIn(min = EDITOR_MIN_HEIGHT_DP.dp)
+                        .testTag("signature_html_editor_webview"),
                     factory = { ctx ->
                         createSignatureEditorWebView(
                             context = ctx,
                             initialHtml = html,
                             onHtmlChange = onHtmlChange,
-                        ).also { webView = it }
+                        ).also { created ->
+                            created.contentDescription = "signature_html_editor_webview"
+                            webView = created
+                        }
                     },
                     update = { view ->
                         // Content updates are pushed from JS; avoid reloading on every recomposition.
@@ -159,16 +164,30 @@ private fun FormattingToolbar(
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = BoltTheme.spacings.half),
     ) {
-        ButtonText(text = "B", onClick = onBold)
-        ButtonText(text = "I", onClick = onItalic)
-        ButtonText(text = "U", onClick = onUnderline)
+        ButtonText(
+            text = "B",
+            onClick = onBold,
+            modifier = Modifier.testTag("signature_editor_bold"),
+        )
+        ButtonText(
+            text = "I",
+            onClick = onItalic,
+            modifier = Modifier.testTag("signature_editor_italic"),
+        )
+        ButtonText(
+            text = "U",
+            onClick = onUnderline,
+            modifier = Modifier.testTag("signature_editor_underline"),
+        )
         ButtonIcon(
             onClick = onInsertLink,
             imageVector = Icons.Outlined.OpenInNew,
+            modifier = Modifier.testTag("signature_editor_link"),
         )
         ButtonIcon(
             onClick = onInsertImage,
             imageVector = Icons.Outlined.Image,
+            modifier = Modifier.testTag("signature_editor_image"),
         )
     }
 }

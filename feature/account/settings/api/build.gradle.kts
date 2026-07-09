@@ -11,6 +11,7 @@ dependencies {
     implementation(projects.core.ui.navigation)
     implementation(projects.core.featureflag)
     implementation(projects.core.android.account)
+    implementation(projects.feature.mail.folder.api)
 }
 
 codeCoverage {

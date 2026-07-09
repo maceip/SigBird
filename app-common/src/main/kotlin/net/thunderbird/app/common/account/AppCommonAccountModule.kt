@@ -18,7 +18,16 @@ import net.thunderbird.feature.account.avatar.DefaultAvatarIconCatalog
 import net.thunderbird.feature.account.avatar.DefaultAvatarMonogramCreator
 import net.thunderbird.feature.account.core.AccountCoreExternalContract.AccountProfileLocalDataSource
 import net.thunderbird.feature.account.core.featureAccountCoreModule
+import net.thunderbird.feature.account.settings.api.AccountSettingsCryptoBridge
+import net.thunderbird.feature.account.settings.api.AccountSettingsCapabilities
+import net.thunderbird.feature.account.settings.api.AccountSettingsFolderProvider
+import net.thunderbird.feature.account.settings.api.AccountSettingsFolderRefresh
 import net.thunderbird.feature.account.settings.api.AccountSettingsLegacyNavigation
+import net.thunderbird.feature.account.settings.api.AccountSettingsNotificationBridge
+import net.thunderbird.feature.account.settings.api.OpenPgpProviderSummaryProvider
+import net.thunderbird.feature.account.settings.impl.ui.folders.FolderDisplayNameFormatter
+import net.thunderbird.feature.account.settings.impl.ui.notifications.RingtoneSummaryFormatter
+import net.thunderbird.feature.account.settings.impl.ui.notifications.VibrationSummaryFormatter
 import net.thunderbird.feature.account.storage.legacy.featureAccountStorageLegacyModule
 import net.thunderbird.feature.mail.account.api.AccountManager
 import org.koin.android.ext.koin.androidApplication
@@ -36,6 +45,67 @@ internal val appCommonAccountModule = module {
 
     single<AccountSettingsLegacyNavigation> {
         DefaultAccountSettingsLegacyNavigation()
+    }
+
+    single<AccountSettingsCapabilities> {
+        DefaultAccountSettingsCapabilities(
+            accountManager = get(),
+            messagingController = get(),
+            vibrator = get(),
+        )
+    }
+
+    single<AccountSettingsFolderProvider> {
+        DefaultAccountSettingsFolderProvider(
+            accountManager = get(),
+            folderRepository = get(),
+            specialFolderSelectionStrategy = get(),
+        )
+    }
+
+    single<AccountSettingsFolderRefresh> {
+        DefaultAccountSettingsFolderRefresh(
+            messagingController = get(),
+            accountManager = get(),
+        )
+    }
+
+    single<AccountSettingsNotificationBridge> {
+        DefaultAccountSettingsNotificationBridge(
+            accountManager = get(),
+            notificationChannelManager = get(),
+            notificationSettingsUpdater = get(),
+        )
+    }
+
+    single<AccountSettingsCryptoBridge> {
+        DefaultAccountSettingsCryptoBridge()
+    }
+
+    factory<FolderDisplayNameFormatter> {
+        DefaultFolderDisplayNameFormatter(
+            context = androidContext(),
+        )
+    }
+
+    factory<RingtoneSummaryFormatter> {
+        DefaultRingtoneSummaryFormatter(
+            context = androidContext(),
+            resources = get(),
+        )
+    }
+
+    factory<VibrationSummaryFormatter> {
+        DefaultVibrationSummaryFormatter(
+            resources = get(),
+        )
+    }
+
+    factory<OpenPgpProviderSummaryProvider> {
+        DefaultOpenPgpProviderSummaryProvider(
+            resources = get(),
+            packageManager = androidContext().packageManager,
+        )
     }
 
     single<AccountManager<LegacyAccount>> {

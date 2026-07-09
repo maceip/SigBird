@@ -62,7 +62,8 @@ import com.fsck.k9.ui.helper.SizeFormatter
 import com.fsck.k9.ui.messagedetails.MessageDetailsFragment
 import com.fsck.k9.ui.messagesource.MessageSourceActivity
 import com.fsck.k9.ui.messageview.MessageCryptoPresenter.MessageCryptoMvpView
-import com.fsck.k9.ui.settings.account.AccountSettingsActivity
+import app.k9mail.feature.launcher.FeatureLauncherActivity
+import app.k9mail.feature.launcher.FeatureLauncherTarget
 import com.fsck.k9.ui.share.ShareIntentBuilder
 import java.util.Locale
 import kotlin.time.Instant
@@ -1097,7 +1098,10 @@ class MessageViewFragment :
         }
 
         override fun showCryptoConfigDialog() {
-            AccountSettingsActivity.startCryptoSettings(requireActivity(), account.uuid)
+            FeatureLauncherActivity.launch(
+                context = requireActivity(),
+                target = FeatureLauncherTarget.AccountCryptoSettings(account.uuid),
+            )
         }
     }
 

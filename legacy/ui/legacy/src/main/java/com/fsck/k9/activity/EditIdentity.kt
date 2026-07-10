@@ -25,14 +25,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.core.content.IntentCompat
-import androidx.core.os.BundleCompat
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.Preferences
 import com.fsck.k9.message.html.SignatureContent
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.BaseActivity
 import com.fsck.k9.ui.identity.SignatureHtmlEditor
+import app.k9mail.library.signatureeditor.SignatureStorage
 import net.thunderbird.components.ui.bolt.atom.Checkbox
 import net.thunderbird.components.ui.bolt.atom.Surface
 import net.thunderbird.components.ui.bolt.atom.button.ButtonIcon
@@ -62,17 +61,12 @@ class EditIdentity : BaseActivity() {
         val accountUuid = intent.getStringExtra(EXTRA_ACCOUNT) ?: error("Missing account UUID")
         account = Preferences.getPreferences().getAccount(accountUuid) ?: error("Couldn't find account")
 
-        val intentIdentity = when {
-            identityIndex != -1 -> {
-                IntentCompat.getParcelableExtra(intent, EXTRA_IDENTITY, Identity::class.java)
-                    ?: error("Missing argument")
-            }
-
+        // Prefer loading from account storage over Intent parcels. HTML signatures with
+        // inline images are often too large for Binder and previously black-screened here.
+        val initialIdentity = when {
+            identityIndex in account.identities.indices -> account.identities[identityIndex]
             else -> Identity()
         }
-        val initialIdentity = savedInstanceState?.let {
-            BundleCompat.getParcelable(it, EXTRA_IDENTITY, Identity::class.java)
-        } ?: intentIdentity
 
         setContent {
             themeProvider.WithTheme {
@@ -101,13 +95,6 @@ class EditIdentity : BaseActivity() {
         Preferences.getPreferences().saveAccount(account)
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        IntentCompat.getParcelableExtra(intent, EXTRA_IDENTITY, Identity::class.java)?.let { identity ->
-            outState.putParcelable(EXTRA_IDENTITY, identity)
-        }
-    }
-
     companion object {
         const val EXTRA_IDENTITY = "com.fsck.k9.EditIdentity_identity"
         const val EXTRA_IDENTITY_INDEX = "com.fsck.k9.EditIdentity_identity_index"
@@ -129,7 +116,10 @@ private fun EditIdentityScreen(
     var email by rememberSaveable { mutableStateOf(initialIdentity.email.orEmpty()) }
     var replyTo by rememberSaveable { mutableStateOf(initialIdentity.replyTo.orEmpty()) }
     var useSignature by rememberSaveable { mutableStateOf(initialIdentity.signatureUse) }
-    var signature by rememberSaveable { mutableStateOf(initialIdentity.signature.orEmpty()) }
+    // Do not use rememberSaveable for signature HTML — inline images can exceed Bundle limits.
+    var signature by remember {
+        mutableStateOf(SignatureStorage.prepareForEditing(initialIdentity.signature))
+    }
 
     val canSave = remember(email, replyTo) {
         emailAddressValidator.isValidAddressOnly(email.trim()) &&

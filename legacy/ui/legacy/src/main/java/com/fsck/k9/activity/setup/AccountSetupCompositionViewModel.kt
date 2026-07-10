@@ -6,6 +6,7 @@ import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.State
 import com.fsck.k9.message.html.SignatureContent
 import com.fsck.k9.ui.R
+import app.k9mail.library.signatureeditor.SignatureStorage
 import kotlinx.collections.immutable.persistentListOf
 import net.thunderbird.core.android.account.LegacyAccount
 import net.thunderbird.core.android.account.LegacyAccountManager
@@ -62,12 +63,15 @@ class AccountSetupCompositionViewModel(
             }
 
             is Event.SignatureChange -> updateState { state ->
-                val sanitized = SignatureContent.sanitizeForStorage(event.signature)
-                account = account.copy(signature = sanitized)
-                state.copy(signature = account.signature ?: "")
+                // Keep the live editor HTML as-is while typing. Sanitizing (and especially
+                // re-parsing large inline images) on every keystroke made the screen unusable.
+                account = account.copy(signature = event.signature)
+                state.copy(signature = event.signature)
             }
 
             is Event.SavePressed -> {
+                val sanitized = SignatureContent.sanitizeForStorage(account.signature)
+                account = account.copy(signature = sanitized)
                 saveAccount()
                 emitEffect(Effect.DoneUpdatingAccount)
             }
@@ -85,7 +89,7 @@ class AccountSetupCompositionViewModel(
                 senderEmail = account.email,
                 bccEmail = account.alwaysBcc ?: "",
                 useSignature = account.signatureUse,
-                signature = account.signature ?: "",
+                signature = SignatureStorage.prepareForEditing(account.signature),
                 signatureLocations = signatureLocations,
                 selectedSignatureLocations = if (account.isSignatureBeforeQuotedText) {
                     Pair(1, resources.stringResource(R.string.account_settings_signature__location_before_quoted_text))

@@ -35,6 +35,18 @@ object SignatureStorage {
         else -> signature
     }
 
+    /**
+     * Downscales oversized inline images then sanitizes. Use when loading a signature into
+     * an editor so previously-saved phone photos do not freeze the UI.
+     */
+    @JvmStatic
+    fun prepareForEditing(signature: String?): String {
+        if (signature.isNullOrBlank()) return signature.orEmpty()
+        if (!isHtml(signature)) return signature
+        val optimized = SignatureInlineImages.optimizeHtml(signature)
+        return htmlSanitizer.sanitize(optimized)
+    }
+
     @JvmStatic
     fun toPlainText(signature: String?): String {
         if (signature.isNullOrBlank()) return ""

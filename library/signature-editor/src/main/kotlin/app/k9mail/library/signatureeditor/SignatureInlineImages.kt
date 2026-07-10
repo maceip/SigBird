@@ -39,18 +39,21 @@ internal object SignatureInlineImages {
         }
 
         val normalizedMime = mimeHint?.lowercase()
-        val canKeepOriginal = bytes.size <= MAX_ENCODED_BYTES && !exceedsMaxDimension(bytes)
-        val originalDataUri = when {
-            !canKeepOriginal -> null
-
-            normalizedMime == "image/png" -> toDataUri("image/png", bytes)
-
-            normalizedMime == "image/jpeg" || normalizedMime == "image/jpg" ->
-                toDataUri("image/jpeg", bytes)
-
-            else -> null
+        val isExplicitlyUnsupported = normalizedMime != null &&
+            normalizedMime != "image/png" &&
+            normalizedMime != "image/jpeg" &&
+            normalizedMime != "image/jpg"
+        if (isExplicitlyUnsupported) {
+            return null
         }
-        return originalDataUri ?: compressBitmap(bytes)
+
+        val canKeepOriginal = bytes.size <= MAX_ENCODED_BYTES && !exceedsMaxDimension(bytes)
+        if (canKeepOriginal && normalizedMime != null) {
+            val mime = if (normalizedMime == "image/png") "image/png" else "image/jpeg"
+            return toDataUri(mime, bytes)
+        }
+
+        return compressBitmap(bytes)
     }
 
     /**

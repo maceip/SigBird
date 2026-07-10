@@ -72,10 +72,25 @@ the 'composer theme' setting).
             tools:ignore="InefficientWeight"
             />
 
-        <app.k9mail.library.signatureeditor.SignatureEditorView
+        <EditText
             android:id="@+id/upper_signature"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
+            android:gravity="top"
+            android:minLines="0"
+            android:hint="@string/message_compose_signature_hint"
+            android:inputType="textMultiLine|textAutoCorrect|textCapSentences"
+            android:imeOptions="flagNoExtractUi|flagNoPersonalizedLearning"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            />
+
+        <com.fsck.k9.view.MessageWebView
+            android:id="@+id/upper_signature_html"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:visibility="gone"
+            android:contentDescription="@string/edit_identity_signature_label"
             />
 
         <com.google.android.material.button.MaterialButton
@@ -142,10 +157,25 @@ the 'composer theme' setting).
 
         </RelativeLayout>
 
-        <app.k9mail.library.signatureeditor.SignatureEditorView
+        <EditText
             android:id="@+id/lower_signature"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
+            android:gravity="top"
+            android:minLines="0"
+            android:hint="@string/message_compose_signature_hint"
+            android:inputType="textMultiLine|textAutoCorrect|textCapSentences"
+            android:imeOptions="flagNoExtractUi|flagNoPersonalizedLearning"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            />
+
+        <com.fsck.k9.view.MessageWebView
+            android:id="@+id/lower_signature_html"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:visibility="gone"
+            android:contentDescription="@string/edit_identity_signature_label"
             />
 
         <!--

@@ -115,5 +115,16 @@ Assisted mint is explicitly labeled and disabled unless `GATEWAY_MODE=dev`.
 3. **Account binding** — bind burns to Thunderbird account UUID / mailbox bucket
    without letting the issuer learn the address (tamayo `mailbox` package).
 4. **Retention / deletion** — when user removes signature image, delete S3 object?
-5. **Where the gateway repo lives long-term** — currently scaffolded under
-   `services/signature-image-gateway` in this tree for DevX; may split later.
+5. **Where the gateway repo lives long-term** — scaffolded under
+   `services/signature-image-gateway` in this tree as the **reference product
+   runtime** (portable core + HTTP/Lambda adapters). May split later.
+
+## Reference implementation notes
+
+Built to mirror tamayo’s own boundary:
+
+- **Crypto / tokens:** import `tokenprofile` + `tokenauth` + `tokenservice`
+  (same packages `cmd/tamayo serve` wires).
+- **Product HTTP + storage + S3:** owned here, not upstreamed into tamayo.
+- **Portable core:** `Gateway.Handle` has no edge SDK types so the same binary
+  logic can sit behind local HTTP, Lambda, or a future Workers adapter.

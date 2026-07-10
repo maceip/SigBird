@@ -22,7 +22,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import net.thunderbird.components.ui.bolt.atom.Checkbox
 import net.thunderbird.components.ui.bolt.atom.RadioGroup
 import net.thunderbird.components.ui.bolt.atom.Surface
@@ -30,7 +33,6 @@ import net.thunderbird.components.ui.bolt.atom.button.ButtonIcon
 import net.thunderbird.components.ui.bolt.atom.button.ButtonText
 import net.thunderbird.components.ui.bolt.atom.text.TextBodyLarge
 import net.thunderbird.components.ui.bolt.atom.text.TextBodySmall
-import net.thunderbird.components.ui.bolt.atom.textfield.TextFieldOutlined
 import net.thunderbird.components.ui.bolt.atom.textfield.TextFieldOutlinedEmailAddress
 import net.thunderbird.components.ui.bolt.molecule.input.TextInput
 import net.thunderbird.components.ui.bolt.organism.TopAppBar
@@ -39,6 +41,7 @@ import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Effect
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.BaseActivity
+import com.fsck.k9.ui.identity.SignatureHtmlEditor
 import kotlinx.collections.immutable.PersistentList
 import net.thunderbird.components.ui.bolt.atom.icon.Icons
 import net.thunderbird.components.ui.bolt.theme.BoltTheme
@@ -79,6 +82,7 @@ class AccountSetupComposition : BaseActivity() {
                     signature = state.value.signature,
                     signatureLocations = state.value.signatureLocations,
                     selectedSignatureLocations = state.value.selectedSignatureLocations,
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
                 )
             }
         }
@@ -111,7 +115,7 @@ fun AccountSetupCompositionScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.testTag("composition_defaults_screen"),
         topBar = {
             TopAppBar(
                 title = stringResource(R.string.account_settings_composition_label),
@@ -126,6 +130,7 @@ fun AccountSetupCompositionScreen(
                         enabled = saveActionEnabled,
                         onClick = { onEvent(Event.SavePressed) },
                         text = stringResource(R.string.edit_identity_save),
+                        modifier = Modifier.testTag("composition_defaults_save"),
                     )
                 },
             )
@@ -166,6 +171,7 @@ fun AccountSetupCompositionScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("composition_use_signature_row")
                         .clickable(
                             enabled = true,
                             onClick = {
@@ -174,17 +180,18 @@ fun AccountSetupCompositionScreen(
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = useSignature, onCheckedChange = { onEvent(Event.UseSignatureChange(it)) })
+                    Checkbox(
+                        checked = useSignature,
+                        onCheckedChange = { onEvent(Event.UseSignatureChange(it)) },
+                        modifier = Modifier.testTag("composition_use_signature"),
+                    )
                     TextBodySmall(text = stringResource(R.string.account_settings_signature_use_label))
                 }
                 if (useSignature) {
-                    TextFieldOutlined(
-                        label = stringResource(id = R.string.account_settings_signature_label),
-                        value = signature,
-                        onValueChange = { onEvent(Event.SignatureChange(it)) },
-                        modifier = Modifier
-                            .padding(horizontal = BoltTheme.spacings.double)
-                            .fillMaxWidth(),
+                    SignatureHtmlEditor(
+                        html = signature,
+                        onHtmlChange = { onEvent(Event.SignatureChange(it)) },
+                        modifier = Modifier.testTag("composition_signature_editor"),
                     )
                     Spacer(modifier = Modifier.height(BoltTheme.spacings.half))
                     TextBodyLarge(

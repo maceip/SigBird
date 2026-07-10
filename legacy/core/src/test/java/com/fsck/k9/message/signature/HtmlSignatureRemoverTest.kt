@@ -200,4 +200,19 @@ class HtmlSignatureRemoverTest {
 
         assertThat(extractText(withoutSignature)).isEqualTo("Body text")
     }
+
+    @Test
+    fun `k9mail-signature class is stripped on reply`() {
+        val html =
+            """
+            <html><body>
+            <div>This is the body text</div>
+            <div class="k9mail-signature"><b>Jane Doe</b><br>Engineer</div>
+            </body></html>
+            """.trimIndent()
+
+        val withoutSignature = stripSignature(html)
+
+        assertThat(extractText(withoutSignature)).isEqualTo("This is the body text")
+    }
 }

@@ -1,0 +1,47 @@
+appId: ${MAESTRO_APP_ID}
+---
+
+# End-to-end: configure an HTML signature, then compose and verify it appears
+#
+# Flow:
+# 1. Ensure a demo/real account exists
+# 2. Open Composition defaults and set a signature via the WYSIWYG editor
+# 3. Open compose and assert the signature preview is shown
+# 4. Fill and send a message
+
+## Ensure account exists
+- runFlow:
+    when:
+      visible:
+        id: "onboarding_welcome_start_button"
+    file: init_with_account.yml
+
+## Configure HTML signature via Composition defaults
+- runFlow:
+    file: ../flows/settings/open_account_composition_defaults.yml
+
+- runFlow:
+    file: ../flows/settings/set_html_signature.yml
+    env:
+      SIGNATURE_TEXT: "SigBird HTML Signature"
+
+## Open compose and verify signature preview is present
+- runFlow:
+    file: ../flows/mail/composer_open.yml
+
+- runFlow:
+    file: ../flows/mail/composer_assert_signature.yml
+    env:
+      SIGNATURE_TEXT: "SigBird HTML Signature"
+
+## Fill and send a message that includes the signature
+- runFlow:
+    file: ../flows/mail/composer_fill.yml
+    env:
+      TO_EMAIL: "signature_e2e@example.com"
+      SUBJECT: "HTML signature e2e"
+      BODY: "Body above signature."
+      IDENTITY: "demo-user@example.com"
+
+- runFlow:
+    file: ../flows/mail/composer_send.yml

@@ -620,6 +620,9 @@
     <string name="edit_identity_reply_to_hint">(Optional)</string>
     <string name="edit_identity_signature_label">Signature</string>
     <string name="edit_identity_signature_hint">(Optional)</string>
+    <string name="edit_identity_signature_link_label">Link URL</string>
+    <string name="manage_identities_add_action">Add identity</string>
+    <string name="manage_identities_default_badge">Default</string>
 
     <string name="account_settings_signature_use_label">Use Signature</string>
     <string name="account_settings_signature_label">Signature</string>

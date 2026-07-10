@@ -22,6 +22,8 @@ import app.k9mail.feature.account.common.ui.item.defaultItemPadding
 import app.k9mail.feature.account.setup.R
 import app.k9mail.feature.account.setup.ui.options.display.DisplayOptionsContract.Event
 import app.k9mail.feature.account.setup.ui.options.display.DisplayOptionsContract.State
+import app.k9mail.library.signatureeditor.SignatureHtmlEditor
+import net.thunderbird.components.ui.bolt.atom.text.TextBodySmall
 import net.thunderbird.components.ui.bolt.atom.text.TextLabelSmall
 import net.thunderbird.components.ui.bolt.molecule.input.TextInput
 import net.thunderbird.components.ui.bolt.template.ResponsiveWidthContainer
@@ -91,14 +93,29 @@ internal fun DisplayOptionsContent(
             }
 
             item {
-                TextInput(
-                    text = state.emailSignature.value,
-                    errorMessage = state.emailSignature.error?.toResourceString(resources),
-                    onTextChange = { onEvent(Event.OnEmailSignatureChanged(it)) },
+                SignatureHtmlEditor(
+                    html = state.emailSignature.value,
+                    onHtmlChange = { onEvent(Event.OnEmailSignatureChanged(it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("account_setup_display_options_signature_input"),
                     label = stringResource(id = R.string.account_setup_options_email_signature_label),
-                    contentPadding = defaultItemPadding(),
-                    isSingleLine = false,
-                    modifier = Modifier.testTag("account_setup_display_options_signature_input"),
+                )
+                state.emailSignature.error?.toResourceString(resources)?.let { errorMessage ->
+                    TextLabelSmall(
+                        text = errorMessage,
+                        modifier = Modifier.padding(defaultItemPadding()),
+                    )
+                }
+            }
+
+            item {
+                TextBodySmall(
+                    text = stringResource(id = R.string.account_setup_options_email_signature_rich_reminder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(defaultItemPadding())
+                        .testTag("account_setup_display_options_signature_reminder"),
                 )
             }
 

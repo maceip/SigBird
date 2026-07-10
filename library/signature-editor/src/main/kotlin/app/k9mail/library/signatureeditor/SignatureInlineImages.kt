@@ -8,10 +8,11 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Encodes and optionally downscales inline signature images.
+ * Encodes and downscales inline signature images.
  *
- * Supports images up to [MAX_ENCODED_BYTES] (2 MiB). Extremely large source photos are
- * resized so the editor stays responsive, but typical ~2 MB signature images are kept.
+ * Caps payloads at [MAX_ENCODED_BYTES] (2 MiB). Larger phone photos are resized so the
+ * editor and identity screens stay responsive — a multi‑megabyte data URI previously
+ * froze Manage Identities and made Composition defaults unusable.
  */
 internal object SignatureInlineImages {
     /** Maximum encoded image payload stored in a signature (2 MiB). */
@@ -20,11 +21,11 @@ internal object SignatureInlineImages {
     /** Reject source files larger than this before attempting decode. */
     const val MAX_SOURCE_BYTES = 12_000_000
 
-    /** Longest edge after optional downscale; keeps WebView layout reasonable. */
-    const val MAX_DIMENSION_PX = 2048
+    /** Longest edge after downscale. */
+    const val MAX_DIMENSION_PX = 1600
 
-    const val JPEG_QUALITY = 85
-    private const val JPEG_RETRY_QUALITY = 70
+    const val JPEG_QUALITY = 82
+    private const val JPEG_RETRY_QUALITY = 68
     private const val MAX_ABSOLUTE_ENCODED_BYTES = MAX_ENCODED_BYTES
 
     private val DATA_URI_REGEX = Regex(
@@ -54,7 +55,6 @@ internal object SignatureInlineImages {
 
     /**
      * Re-encodes data-URI images that exceed the 2 MiB budget or max dimension.
-     * Images within budget are left unchanged.
      */
     fun optimizeHtml(html: String): String {
         if (!html.contains("data:image", ignoreCase = true)) {

@@ -25,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
-import app.k9mail.library.signatureeditor.SignatureStorage
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.Preferences
 import com.fsck.k9.message.html.SignatureContent
@@ -116,10 +115,9 @@ private fun EditIdentityScreen(
     var email by rememberSaveable { mutableStateOf(initialIdentity.email.orEmpty()) }
     var replyTo by rememberSaveable { mutableStateOf(initialIdentity.replyTo.orEmpty()) }
     var useSignature by rememberSaveable { mutableStateOf(initialIdentity.signatureUse) }
-    // Do not use rememberSaveable for signature HTML — inline images can exceed Bundle limits.
-    var signature by remember {
-        mutableStateOf(SignatureStorage.prepareForEditing(initialIdentity.signature))
-    }
+    // Keep the raw stored signature in Compose state. Image downscale + sanitize happen
+    // once inside the WebView document builder — doing it here AND there froze the UI.
+    var signature by remember { mutableStateOf(initialIdentity.signature.orEmpty()) }
 
     val canSave = remember(email, replyTo) {
         emailAddressValidator.isValidAddressOnly(email.trim()) &&

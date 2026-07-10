@@ -6,6 +6,20 @@
     <string name="signature_editor_bold">Bold</string>
     <string name="signature_editor_italic">Italic</string>
     <string name="signature_editor_underline">Underline</string>
+    <string name="signature_editor_strikethrough">Strikethrough</string>
+    <string name="signature_editor_font_family">Font</string>
+    <string name="signature_editor_font_size">Text size</string>
+    <string name="signature_editor_font_size_small">Small</string>
+    <string name="signature_editor_font_size_normal">Normal</string>
+    <string name="signature_editor_font_size_large">Large</string>
+    <string name="signature_editor_font_size_huge">Huge</string>
+    <string name="signature_editor_text_color">Text color</string>
+    <string name="signature_editor_bulleted_list">Bulleted list</string>
+    <string name="signature_editor_numbered_list">Numbered list</string>
+    <string name="signature_editor_align_left">Align left</string>
+    <string name="signature_editor_align_center">Align center</string>
+    <string name="signature_editor_align_right">Align right</string>
     <string name="signature_editor_insert_link">Insert link</string>
     <string name="signature_editor_insert_image">Insert image</string>
+    <string name="signature_editor_horizontal_rule">Horizontal line</string>
 </resources>

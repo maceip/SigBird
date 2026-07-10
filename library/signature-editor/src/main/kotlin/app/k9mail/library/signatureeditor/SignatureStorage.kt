@@ -36,8 +36,8 @@ object SignatureStorage {
     }
 
     /**
-     * Downscales oversized inline images then sanitizes. Use when loading a signature into
-     * an editor so previously-saved phone photos do not freeze the UI.
+     * Downscales oversized inline images then sanitizes for the editor WebView.
+     * Call at most once when building the editor document — not on every Compose recompose.
      */
     @JvmStatic
     fun prepareForEditing(signature: String?): String = when {

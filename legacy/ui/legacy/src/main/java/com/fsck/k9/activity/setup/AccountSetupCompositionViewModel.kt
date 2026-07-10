@@ -1,6 +1,5 @@
 package com.fsck.k9.activity.setup
 
-import app.k9mail.library.signatureeditor.SignatureStorage
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Effect
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
@@ -89,7 +88,7 @@ class AccountSetupCompositionViewModel(
                 senderEmail = account.email,
                 bccEmail = account.alwaysBcc ?: "",
                 useSignature = account.signatureUse,
-                signature = SignatureStorage.prepareForEditing(account.signature),
+                signature = account.signature.orEmpty(),
                 signatureLocations = signatureLocations,
                 selectedSignatureLocations = if (account.isSignatureBeforeQuotedText) {
                     Pair(1, resources.stringResource(R.string.account_settings_signature__location_before_quoted_text))

@@ -68,7 +68,7 @@ internal object SignatureEditorWebViewFactory {
             signatureHtml.isBlank() -> ""
 
             SignatureStorage.isHtml(signatureHtml) -> {
-                // prepareForEditing already optimizes + sanitizes.
+                // Optimize oversized images + sanitize once when the document is built.
                 SignatureStorage.prepareForEditing(signatureHtml)
             }
 
@@ -144,6 +144,14 @@ internal object SignatureEditorWebViewFactory {
                 emitNow();
               });
               window.SignatureEditor = {
+                command: function(name, value) {
+                  if (typeof value === 'undefined' || value === null) {
+                    document.execCommand(name, false, null);
+                  } else {
+                    document.execCommand(name, false, value);
+                  }
+                  emitNow();
+                },
                 insertLink: function(url) {
                   document.execCommand('createLink', false, url);
                   emitNow();

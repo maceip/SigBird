@@ -62,13 +62,26 @@ class SignatureStorageTest {
     }
 
     @Test
-    fun `prepareForEditing sanitizes html and leaves plain text alone`() {
-        val html = """<div>Name<script>alert(1)</script></div>"""
+    fun `sanitizeForStorage keeps lists colors and alignment markup`() {
+        val html = """
+            <div style="text-align: center; color: #0B57D0; font-family: Arial">
+              <ul><li><b>One</b></li></ul>
+              <ol><li><i>Two</i></li></ol>
+              <s>Old</s>
+            </div>
+        """.trimIndent()
 
-        val prepared = SignatureStorage.prepareForEditing(html)
+        val result = SignatureStorage.sanitizeForStorage(html).orEmpty()
 
-        assertThat(prepared).contains("Name")
-        assertThat(prepared).doesNotContain("<script")
+        assertThat(result).contains("<ul>")
+        assertThat(result).contains("<ol>")
+        assertThat(result).contains("text-align: center")
+        assertThat(result).contains("color: #0B57D0")
+        assertThat(result).contains("<s>")
+    }
+
+    @Test
+    fun `prepareForEditing returns plain text unchanged`() {
         assertThat(SignatureStorage.prepareForEditing("Just text")).isEqualTo("Just text")
     }
 

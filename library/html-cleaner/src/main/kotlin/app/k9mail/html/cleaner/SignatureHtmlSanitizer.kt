@@ -8,10 +8,12 @@ import org.jsoup.safety.Safelist
 /**
  * Sanitizes HTML email signatures for outbound use.
  *
- * The allow-list is intentionally narrow and aligned with formatting that modern
- * Outlook (Windows), Gmail, and Apple Mail reliably support in July 2026:
- * basic text formatting, links, and PNG/JPEG images. Scripts, stylesheets,
- * remote tracking pixels via unsupported schemes, and exotic markup are removed.
+ * The allow-list is intentionally aligned with formatting that modern
+ * Outlook (Windows), Gmail, and Apple Mail reliably support:
+ * text styles (bold/italic/underline/strike), web-safe fonts and sizes,
+ * text/background colors, lists, alignment, links, tables, horizontal rules,
+ * and PNG/JPEG images. Scripts, stylesheets, remote tracking pixels via
+ * unsupported schemes, and exotic markup are removed.
  */
 class SignatureHtmlSanitizer {
     private val cleaner = Cleaner(createSafelist())

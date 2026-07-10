@@ -7,12 +7,20 @@ import org.junit.Test
 
 class SignatureEditorWebViewFactoryTest {
     @Test
+    fun `buildEditorDocument exposes formatting command API`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
+
+        assertThat(document).contains("command: function")
+        assertThat(document).contains("document.execCommand")
+        assertThat(document).contains("emitDebounced")
+        assertThat(document).contains("flush:")
+    }
+
+    @Test
     fun `buildEditorDocument debounces input and flushes on blur`() {
         val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
 
-        assertThat(document).contains("emitDebounced")
         assertThat(document).contains("addEventListener('blur'")
-        assertThat(document).contains("flush:")
         assertThat(document).contains("max-height: 320px")
     }
 

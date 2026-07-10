@@ -24,9 +24,18 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FormatAlignCenter
+import androidx.compose.material.icons.outlined.FormatAlignLeft
+import androidx.compose.material.icons.outlined.FormatAlignRight
 import androidx.compose.material.icons.outlined.FormatBold
+import androidx.compose.material.icons.outlined.FormatColorText
 import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.FormatUnderlined
+import androidx.compose.material.icons.outlined.HorizontalRule
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -144,14 +153,23 @@ object Icons {
         val Flower: ImageVector = OutlinedFlowerIcon
         val Folder: ImageVector = Icons.Outlined.Folder
         val FolderManaged: ImageVector = OutlinedFolderManagedIcon
+        val FormatAlignCenter: ImageVector = Icons.Outlined.FormatAlignCenter
+        val FormatAlignLeft: ImageVector = Icons.Outlined.FormatAlignLeft
+        val FormatAlignRight: ImageVector = Icons.Outlined.FormatAlignRight
         val FormatBold: ImageVector = Icons.Outlined.FormatBold
+        val FormatColorText: ImageVector = Icons.Outlined.FormatColorText
         val FormatItalic: ImageVector = Icons.Outlined.FormatItalic
+        val FormatListBulleted: ImageVector = Icons.Outlined.FormatListBulleted
+        val FormatListNumbered: ImageVector = Icons.Outlined.FormatListNumbered
+        val FormatSize: ImageVector = Icons.Outlined.FormatSize
+        val FormatStrikethrough: ImageVector = Icons.Outlined.FormatStrikethrough
         val FormatUnderlined: ImageVector = Icons.Outlined.FormatUnderlined
 
         val Game: ImageVector = OutlinedGameIcon
         val Group: ImageVector = OutlinedGroupIcon
 
         val Hearth: ImageVector = OutlinedHearthIcon
+        val HorizontalRule: ImageVector = Icons.Outlined.HorizontalRule
 
         val Image: ImageVector = OutlinedImageIcon
         val Inbox: ImageVector = Icons.Outlined.Inbox

@@ -92,4 +92,22 @@ class SignatureHtmlSanitizerTest {
     fun `empty input returns empty fragment`() {
         assertThat(testSubject.sanitize("")).isEqualTo("")
     }
+
+    @Test
+    fun `keeps lists colors fonts and strikethrough used by modern clients`() {
+        val html = """
+            <div style="font-family: Arial; font-size: 14px; color: #333333; text-align: left">
+              <ul><li><b>Bold</b> <s>strike</s></li></ul>
+              <hr>
+            </div>
+        """.trimIndent()
+
+        val result = testSubject.sanitize(html)
+
+        assertThat(result).contains("<ul>")
+        assertThat(result).contains("font-family: Arial")
+        assertThat(result).contains("color: #333333")
+        assertThat(result).contains("<s>")
+        assertThat(result).contains("<hr")
+    }
 }

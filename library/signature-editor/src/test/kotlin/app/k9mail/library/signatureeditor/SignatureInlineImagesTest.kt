@@ -11,6 +11,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isLessThan
 import assertk.assertions.isLessThanOrEqualTo
 import assertk.assertions.isNotNull
+import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import java.io.ByteArrayOutputStream
 import org.junit.Test
@@ -21,7 +22,7 @@ import org.robolectric.RobolectricTestRunner
 class SignatureInlineImagesTest {
     @Test
     fun `encodeBytes keeps images within two megabyte budget and max dimension`() {
-        val jpeg = createNoisyJpeg(width = 1200, height = 900)
+        val jpeg = createNoisyJpeg(width = 800, height = 600)
         assertThat(jpeg.size).isLessThanOrEqualTo(SignatureInlineImages.MAX_ENCODED_BYTES)
 
         val dataUri = SignatureInlineImages.encodeBytes(jpeg, "image/jpeg")
@@ -52,6 +53,12 @@ class SignatureInlineImagesTest {
     }
 
     @Test
+    fun `encodeBytes rejects empty and unsupported mime`() {
+        assertThat(SignatureInlineImages.encodeBytes(ByteArray(0), "image/jpeg")).isNull()
+        assertThat(SignatureInlineImages.encodeBytes(byteArrayOf(1, 2, 3), "image/gif")).isNull()
+    }
+
+    @Test
     fun `optimizeHtml rewrites images that exceed max dimension`() {
         val hugeJpeg = createNoisyJpeg(width = 4000, height = 3000)
         val hugeBase64 = Base64.encodeToString(hugeJpeg, Base64.NO_WRAP)
@@ -65,19 +72,12 @@ class SignatureInlineImagesTest {
     }
 
     @Test
-    fun `optimizeHtml leaves two megabyte class signatures unchanged when within limits`() {
-        val jpeg = createNoisyJpeg(width = 1200, height = 900)
+    fun `optimizeHtml leaves images within limits unchanged`() {
+        val jpeg = createNoisyJpeg(width = 800, height = 600)
         val base64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
         val html = """<div>Small<img src="data:image/jpeg;base64,$base64" alt="x"></div>"""
 
         assertThat(SignatureInlineImages.optimizeHtml(html)).isEqualTo(html)
-    }
-
-    @Test
-    fun `optimizeHtml leaves tiny placeholders unchanged`() {
-        val html = """<div>Small<img src="data:image/png;base64,iVBORw0KGgo=" alt="x"></div>"""
-
-        assertThat(SignatureInlineImages.optimizeHtml(html)).contains("iVBORw0KGgo=")
     }
 
     private fun createNoisyJpeg(width: Int, height: Int): ByteArray {

@@ -25,13 +25,13 @@ object HtmlSignatureDeduplicator {
             .filter { it.isSignatureElement() }
 
         if (signatures.size <= 1) {
-            return toCompactString(document)
+            return html
         }
 
         // Keep the first signature; remove the rest (typically quoted repeats).
         signatures.drop(1).forEach { it.remove() }
 
-        return toCompactString(document)
+        return toBodyHtml(document)
     }
 
     private fun Element.isSignatureElement(): Boolean {
@@ -40,10 +40,10 @@ object HtmlSignatureDeduplicator {
         return className.split(Regex("\\s+")).any { it == "signature" }
     }
 
-    private fun toCompactString(document: org.jsoup.nodes.Document): String {
+    private fun toBodyHtml(document: org.jsoup.nodes.Document): String {
         document.outputSettings()
             .prettyPrint(false)
             .indentAmount(0)
-        return document.html()
+        return document.body().html()
     }
 }

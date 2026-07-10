@@ -7,9 +7,13 @@ import net.thunderbird.feature.account.AccountIdFactory
 import net.thunderbird.feature.account.settings.api.AccountSettingsNavigation
 import net.thunderbird.feature.account.settings.api.AccountSettingsRoute
 import net.thunderbird.feature.account.settings.impl.ui.compositionMail.CompositionMailSettingsScreen
+import net.thunderbird.feature.account.settings.impl.ui.crypto.CryptoSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.FetchingMailSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.fetchingMail.advanced.AdvancedFetchingMailSettingsScreen
+import net.thunderbird.feature.account.settings.impl.ui.folders.FolderSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.general.GeneralSettingsScreen
+import net.thunderbird.feature.account.settings.impl.ui.hub.HubSettingsScreen
+import net.thunderbird.feature.account.settings.impl.ui.notifications.NotificationSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.readingMail.ReadingMailSettingsScreen
 import net.thunderbird.feature.account.settings.impl.ui.search.SearchSettingsScreen
 
@@ -21,6 +25,20 @@ internal class DefaultAccountSettingsNavigation : AccountSettingsNavigation {
         onBack: () -> Unit,
         onFinish: (AccountSettingsRoute) -> Unit,
     ) {
+        with(navGraphBuilder) {
+            deepLinkComposable<AccountSettingsRoute.Hub>(
+                basePath = AccountSettingsRoute.Hub.BASE_PATH,
+            ) { backStackEntry ->
+                val hubRoute = backStackEntry.toRoute<AccountSettingsRoute.Hub>()
+                val accountId = AccountIdFactory.of(hubRoute.accountId)
+
+                HubSettingsScreen(
+                    accountId = accountId,
+                    onBack = onBack,
+                )
+            }
+        }
+
         with(navGraphBuilder) {
             deepLinkComposable<AccountSettingsRoute.GeneralSettings>(
                 basePath = AccountSettingsRoute.GeneralSettings.BASE_PATH,
@@ -101,6 +119,48 @@ internal class DefaultAccountSettingsNavigation : AccountSettingsNavigation {
                 val accountId = AccountIdFactory.of(searchSettingsRoute.accountId)
 
                 SearchSettingsScreen(
+                    accountId = accountId,
+                    onBack = onBack,
+                )
+            }
+        }
+
+        with(navGraphBuilder) {
+            deepLinkComposable<AccountSettingsRoute.FolderSettings>(
+                basePath = AccountSettingsRoute.FolderSettings.BASE_PATH,
+            ) { backStackEntry ->
+                val folderSettingsRoute = backStackEntry.toRoute<AccountSettingsRoute.FolderSettings>()
+                val accountId = AccountIdFactory.of(folderSettingsRoute.accountId)
+
+                FolderSettingsScreen(
+                    accountId = accountId,
+                    onBack = onBack,
+                )
+            }
+        }
+
+        with(navGraphBuilder) {
+            deepLinkComposable<AccountSettingsRoute.NotificationSettings>(
+                basePath = AccountSettingsRoute.NotificationSettings.BASE_PATH,
+            ) { backStackEntry ->
+                val notificationSettingsRoute = backStackEntry.toRoute<AccountSettingsRoute.NotificationSettings>()
+                val accountId = AccountIdFactory.of(notificationSettingsRoute.accountId)
+
+                NotificationSettingsScreen(
+                    accountId = accountId,
+                    onBack = onBack,
+                )
+            }
+        }
+
+        with(navGraphBuilder) {
+            deepLinkComposable<AccountSettingsRoute.CryptoSettings>(
+                basePath = AccountSettingsRoute.CryptoSettings.BASE_PATH,
+            ) { backStackEntry ->
+                val cryptoSettingsRoute = backStackEntry.toRoute<AccountSettingsRoute.CryptoSettings>()
+                val accountId = AccountIdFactory.of(cryptoSettingsRoute.accountId)
+
+                CryptoSettingsScreen(
                     accountId = accountId,
                     onBack = onBack,
                 )

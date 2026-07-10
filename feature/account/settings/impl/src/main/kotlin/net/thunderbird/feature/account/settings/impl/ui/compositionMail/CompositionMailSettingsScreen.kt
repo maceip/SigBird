@@ -36,6 +36,7 @@ internal fun CompositionMailSettingsScreen(
     val (state, dispatch) = viewModel.observe { effect ->
         when (effect) {
             Effect.NavigateBack -> onBack()
+
             Effect.NavigateToCompositionDefaults ->
                 legacyNavigation.launchCompositionDefaults(context, accountId)
 

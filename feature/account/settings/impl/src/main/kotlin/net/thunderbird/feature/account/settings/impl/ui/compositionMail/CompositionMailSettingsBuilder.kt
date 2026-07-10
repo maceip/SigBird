@@ -37,6 +37,7 @@ internal class CompositionMailSettingsOptionsMapper(
     )
 }
 
+@Suppress("TooManyFunctions")
 internal class CompositionMailSettingsBuilder(
     private val resources: StringsResourceManager,
     private val optionsMapper: CompositionMailSettingsOptionsMapper,

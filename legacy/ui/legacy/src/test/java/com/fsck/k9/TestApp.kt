@@ -1,6 +1,7 @@
 package com.fsck.k9
 
 import android.app.Application
+import androidx.compose.runtime.Composable
 import app.k9mail.feature.telemetry.telemetryModule
 import app.k9mail.legacy.di.DI
 import com.fsck.k9.contacts.ContactPictureLoader
@@ -23,6 +24,7 @@ import net.thunderbird.core.logging.legacy.Log
 import net.thunderbird.core.logging.testing.TestLogLevelManager
 import net.thunderbird.core.logging.testing.TestLogger
 import net.thunderbird.core.preference.storage.StoragePersister
+import net.thunderbird.core.ui.theme.api.FeatureThemeProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssClassNameProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssStyleProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssVariableNameProvider
@@ -92,6 +94,19 @@ val testModule = module {
     single<CssVariableNameProvider> { mock() }
     single<CssClassNameProvider> { mock() }
     factoryListOf<CssStyleProvider>()
+    single<FeatureThemeProvider> { FakeFeatureThemeProvider() }
+}
+
+private class FakeFeatureThemeProvider : FeatureThemeProvider {
+    @Composable
+    override fun WithTheme(content: @Composable () -> Unit) {
+        content()
+    }
+
+    @Composable
+    override fun WithTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
+        content()
+    }
 }
 
 class FakePlatformConfigProvider : PlatformConfigProvider {

@@ -86,6 +86,7 @@ internal fun CompositionMailSettingsContent(
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 private fun handleSettingChange(
     setting: Setting,
     onEvent: (Event) -> Unit,

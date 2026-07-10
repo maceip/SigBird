@@ -39,9 +39,13 @@ internal class CompositionMailSettingsViewModel(
     override fun event(event: Event) {
         when (event) {
             Event.OnBackPressed -> emitEffect(Effect.NavigateBack)
+
             Event.OnCompositionDefaultsClick -> emitEffect(Effect.NavigateToCompositionDefaults)
+
             Event.OnManageIdentitiesClick -> emitEffect(Effect.NavigateToManageIdentities)
+
             Event.OnOutgoingServerClick -> emitEffect(Effect.NavigateToOutgoingServer)
+
             is Event.OnMessageFormatChange -> updateSetting(
                 command = AccountSettingsDomainContract.UpdateCompositionMailSettingsCommand.UpdateMessageFormat(
                     event.messageFormat.id,
@@ -70,12 +74,15 @@ internal class CompositionMailSettingsViewModel(
                 onSuccess = { updateState { it.copy(quoteStyle = event.quoteStyle) } },
             )
 
-            is Event.OnDefaultQuotedTextShownToggle -> updateSetting(
-                command = AccountSettingsDomainContract.UpdateCompositionMailSettingsCommand.UpdateDefaultQuotedTextShown(
-                    event.enabled,
-                ),
-                onSuccess = { updateState { it.copy(defaultQuotedTextShown = event.enabled) } },
-            )
+            is Event.OnDefaultQuotedTextShownToggle -> {
+                val command =
+                    AccountSettingsDomainContract.UpdateCompositionMailSettingsCommand
+                        .UpdateDefaultQuotedTextShown(event.enabled)
+                updateSetting(
+                    command = command,
+                    onSuccess = { updateState { it.copy(defaultQuotedTextShown = event.enabled) } },
+                )
+            }
 
             is Event.OnReplyAfterQuoteToggle -> updateSetting(
                 command = AccountSettingsDomainContract.UpdateCompositionMailSettingsCommand.UpdateReplyAfterQuote(

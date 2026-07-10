@@ -2,6 +2,7 @@ package net.thunderbird.app.common.account
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import com.fsck.k9.notification.NotificationChannelManager
 import com.fsck.k9.notification.NotificationSettingsUpdater
@@ -17,7 +18,9 @@ internal class DefaultAccountSettingsNotificationBridge(
 ) : AccountSettingsNotificationBridge {
     override suspend fun syncNotificationSettings(accountId: AccountId) {
         val account = accountManager.getAccount("${accountId.value}") ?: return
-        notificationSettingsUpdater.updateNotificationSettings(account)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationSettingsUpdater.updateNotificationSettings(account)
+        }
     }
 
     override suspend fun getNotificationChannelId(

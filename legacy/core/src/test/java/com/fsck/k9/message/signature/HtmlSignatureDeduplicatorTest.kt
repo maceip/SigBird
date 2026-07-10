@@ -7,6 +7,15 @@ import org.junit.Test
 
 class HtmlSignatureDeduplicatorTest {
     @Test
+    fun `returns html fragment unchanged when no signatures are present`() {
+        val html = """<pre class="k9mail"><div dir="auto">Hello</div></pre>"""
+
+        val result = HtmlSignatureDeduplicator.deduplicate(html)
+
+        assertThat(result).isEqualTo(html)
+    }
+
+    @Test
     fun `keeps single signature unchanged`() {
         val html = """
             <html><body>

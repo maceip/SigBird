@@ -34,7 +34,7 @@ internal class HubSettingsViewModel(
             HubSettingsContract.Event.OnBackPressed -> emitEffect(HubSettingsContract.Effect.NavigateBack)
 
             is HubSettingsContract.Event.OnAccountSelected -> {
-                if (event.account.id != accountId.value) {
+                if (event.account.id != accountId.value.toString()) {
                     emitEffect(HubSettingsContract.Effect.NavigateToAccount(event.account.id))
                 }
             }
@@ -79,7 +79,7 @@ internal class HubSettingsViewModel(
                     state.copy(
                         accounts = profiles.toImmutableList(),
                         selectedAccount = selected?.let {
-                            SelectOption(it.accountId.value) { it.name }
+                            SelectOption(it.accountId.value.toString()) { it.name }
                         },
                     )
                 }

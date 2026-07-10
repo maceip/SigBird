@@ -25,7 +25,7 @@ internal class HubSettingsBuilder(
                     displayValueAsSecondaryText = true,
                     value = selectedAccount,
                     options = state.accounts.map { account ->
-                        SettingValue.Select.SelectOption(account.accountId.value) { account.name }
+                        SettingValue.Select.SelectOption(account.accountId.value.toString()) { account.name }
                     }.toImmutableList(),
                 )
             }

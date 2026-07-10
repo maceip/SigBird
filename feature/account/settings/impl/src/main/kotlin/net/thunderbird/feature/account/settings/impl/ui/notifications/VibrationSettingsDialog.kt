@@ -1,15 +1,13 @@
 package net.thunderbird.feature.account.settings.impl.ui.notifications
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import net.thunderbird.components.ui.bolt.atom.Switch
+import net.thunderbird.components.ui.bolt.atom.button.ButtonText
+import net.thunderbird.components.ui.bolt.atom.button.RadioButton
+import net.thunderbird.components.ui.bolt.atom.text.TextBodyMedium
 import net.thunderbird.components.ui.bolt.organism.AlertDialog
 import net.thunderbird.feature.account.settings.R
 import net.thunderbird.feature.notification.NotificationVibration
@@ -38,65 +40,6 @@ internal fun VibrationSettingsDialog(
 
     AlertDialog(
         title = stringResource(R.string.account_settings_vibration),
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isEnabled = !isEnabled }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.account_settings_vibration_enabled),
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(checked = isEnabled, onCheckedChange = { isEnabled = it })
-                }
-
-                VibratePattern.entries.forEach { pattern ->
-                    val label = vibrationPatternLabel(pattern)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = isEnabled) { selectedPattern = pattern }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = selectedPattern == pattern,
-                            onClick = { selectedPattern = pattern },
-                            enabled = isEnabled,
-                        )
-                        Text(text = label)
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.account_settings_vibration_times, repeatCount),
-                        modifier = Modifier.weight(1f),
-                    )
-                    androidx.compose.material3.Slider(
-                        value = (repeatCount - 1).toFloat(),
-                        onValueChange = { repeatCount = it.toInt() + 1 },
-                        valueRange = 0f..4f,
-                        steps = 3,
-                        enabled = isEnabled,
-                        modifier = Modifier.weight(2f),
-                    )
-                }
-            }
-        },
         confirmText = stringResource(R.string.account_settings_okay_action),
         dismissText = stringResource(R.string.account_settings_cancel_action),
         onConfirmClick = {
@@ -110,6 +53,65 @@ internal fun VibrationSettingsDialog(
         },
         onDismissClick = onDismiss,
         onDismissRequest = onDismiss,
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isEnabled = !isEnabled }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextBodyMedium(
+                        text = stringResource(R.string.account_settings_vibration_enabled),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = isEnabled,
+                        onCheckedChange = { isEnabled = it },
+                    )
+                }
+
+                VibratePattern.entries.forEach { pattern ->
+                    RadioButton(
+                        selected = selectedPattern == pattern,
+                        label = vibrationPatternLabel(pattern),
+                        onClick = { selectedPattern = pattern },
+                        enabled = isEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextBodyMedium(
+                        text = stringResource(R.string.account_settings_vibration_times, repeatCount),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ButtonText(
+                            text = "-",
+                            onClick = { if (repeatCount > 1) repeatCount -= 1 },
+                            enabled = isEnabled && repeatCount > 1,
+                        )
+                        ButtonText(
+                            text = "+",
+                            onClick = { if (repeatCount < 5) repeatCount += 1 },
+                            enabled = isEnabled && repeatCount < 5,
+                        )
+                    }
+                }
+            }
+        },
     )
 }
 

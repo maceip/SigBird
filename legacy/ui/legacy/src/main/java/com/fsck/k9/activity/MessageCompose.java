@@ -29,6 +29,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Parcelable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -66,7 +67,6 @@ import kotlin.Unit;
 import net.thunderbird.core.android.account.LegacyAccountDto;
 import app.k9mail.legacy.di.DI;
 import net.thunderbird.core.android.account.Identity;
-import com.fsck.k9.FontSizes;
 import com.fsck.k9.K9;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.activity.MessageLoaderHelper.MessageLoaderCallbacks;
@@ -99,8 +99,8 @@ import com.fsck.k9.fragment.ProgressDialogFragment.CancelListener;
 import com.fsck.k9.helper.Contacts;
 import com.fsck.k9.helper.CrLfConverter;
 import com.fsck.k9.helper.IdentityHelper;
-import app.k9mail.library.signatureeditor.SignatureEditorView;
-import app.k9mail.library.signatureeditor.SignatureStorage;
+import com.fsck.k9.message.html.SignatureContent;
+import com.fsck.k9.ui.compose.SignatureComposeController;
 import com.fsck.k9.helper.MailTo;
 import com.fsck.k9.helper.ReplyToParser;
 import com.fsck.k9.helper.SimpleTextWatcher;
@@ -200,6 +200,8 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     private static final String STATE_KEY_READ_RECEIPT = "com.fsck.k9.activity.MessageCompose.messageReadReceipt";
     private static final String STATE_KEY_CHANGES_MADE_SINCE_LAST_SAVE = "com.fsck.k9.activity.MessageCompose.changesMadeSinceLastSave";
     private static final String STATE_ALREADY_NOTIFIED_USER_OF_EMPTY_SUBJECT = "alreadyNotifiedUserOfEmptySubject";
+    private static final String STATE_SIGNATURE_CHANGED = "com.fsck.k9.activity.MessageCompose.signatureChanged";
+    private static final String STATE_COMPOSE_SIGNATURE = "com.fsck.k9.activity.MessageCompose.composeSignature";
     private static final String STATE_ACTIVE_IN_APP_NOTIFICATIONS =
             "com.fsck.k9.activity.MessageCompose.activeInAppNotifications";
 
@@ -261,7 +263,10 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     private Identity identity;
     private boolean identityChanged = false;
     private boolean signatureChanged = false;
-    private boolean updatingSignature = false;
+    private SignatureComposeController signatureComposeController;
+    private final android.os.Handler signatureDraftHandler = new Handler(Looper.getMainLooper());
+    private final Runnable signatureDraftSaveRunnable = this::checkToSaveDraftImplicitly;
+    private static final long SIGNATURE_DRAFT_SAVE_DELAY_MS = 2000L;
 
     // relates to the message being replied to, forwarded, or edited TODO split up?
     private MessageReference relatedMessageReference;
@@ -289,13 +294,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
 
     private MaterialTextView chooseIdentityView;
     private EditText subjectView;
-    private SignatureEditorView signatureView;
-    private final SignatureEditorView.OnSignatureChangeListener signChangeListener = () -> {
-        changesMadeSinceLastSave = true;
-        if (!updatingSignature) {
-            signatureChanged = true;
-        }
-    };
+    private EditText signatureView;
     private EditText messageContentView;
     private LinearLayout attachmentsView;
 
@@ -383,8 +382,10 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         subjectView.getInputExtras(true).putBoolean("allowEmoji", true);
         applyIncognitoKeyboardSetting(subjectView);
 
-        SignatureEditorView upperSignature = findViewById(R.id.upper_signature);
-        SignatureEditorView lowerSignature = findViewById(R.id.lower_signature);
+        EditText upperSignature = findViewById(R.id.upper_signature);
+        EditText lowerSignature = findViewById(R.id.lower_signature);
+        applyIncognitoKeyboardSetting(upperSignature);
+        applyIncognitoKeyboardSetting(lowerSignature);
 
 
         QuotedMessageMvpView quotedMessageMvpView = new QuotedMessageMvpView(this);
@@ -504,12 +505,26 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
             signatureView = lowerSignature;
             upperSignature.setVisibility(View.GONE);
         }
-        signatureChanged = false;
+        signatureComposeController = new SignatureComposeController(
+                this,
+                (signature, changed) -> {
+                    signatureChanged = changed;
+                    changesMadeSinceLastSave = true;
+                    // Keep identity in sync so IdentityHeaderBuilder persists the edit.
+                    if (identity != null) {
+                        identity = identity.withSignature(signature).withSignatureUse(true);
+                    }
+                    scheduleSignatureDraftSave();
+                }
+        );
+        signatureComposeController.bindPosition(account.isSignatureBeforeQuotedText());
         updateSignature();
-        signatureView.setOnSignatureChangeListener(signChangeListener);
+        // Plain-text edits and WYSIWYG writes are handled by SignatureComposeController.
+        // Do not attach signTextWatcher to signatureView — programmatic setText would false-trigger.
 
         if (!identity.getSignatureUse()) {
             signatureView.setVisibility(View.GONE);
+            signatureComposeController.hide();
         }
 
         requestReadReceipt = account.isMessageReadReceipt();
@@ -556,9 +571,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         if(generalSettingsManager.getConfig().getDisplay().getVisualSettings().isUseMessageViewFixedWidthFont())
             messageContentView.setTypeface(Typeface.MONOSPACE);
         K9.getFontSizes().setViewTextSize(messageContentView, fontSize);
-        if (fontSize != FontSizes.FONT_DEFAULT) {
-            signatureView.setFontSizeSp(fontSize);
-        }
+        K9.getFontSizes().setViewTextSize(signatureView, fontSize);
 
 
         updateMessageFormat();
@@ -688,6 +701,8 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     public void onPause() {
         super.onPause();
         messagingController.removeListener(messagingListener);
+        // Flush any pending signature draft save before we may be killed.
+        signatureDraftHandler.removeCallbacks(signatureDraftSaveRunnable);
 
         boolean isPausingOnConfigurationChange = (getChangingConfigurations() & ActivityInfo.CONFIG_ORIENTATION)
                 == ActivityInfo.CONFIG_ORIENTATION;
@@ -698,6 +713,15 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         }
 
         checkToSaveDraftImplicitly();
+    }
+
+    @Override
+    protected void onDestroy() {
+        signatureDraftHandler.removeCallbacks(signatureDraftSaveRunnable);
+        if (signatureComposeController != null) {
+            signatureComposeController.destroy();
+        }
+        super.onDestroy();
     }
 
     /**
@@ -723,6 +747,10 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         outState.putBoolean(STATE_KEY_READ_RECEIPT, requestReadReceipt);
         outState.putBoolean(STATE_KEY_CHANGES_MADE_SINCE_LAST_SAVE, changesMadeSinceLastSave);
         outState.putBoolean(STATE_ALREADY_NOTIFIED_USER_OF_EMPTY_SUBJECT, alreadyNotifiedUserOfEmptySubject);
+        outState.putBoolean(STATE_SIGNATURE_CHANGED, signatureChanged);
+        if (signatureComposeController != null) {
+            outState.putString(STATE_COMPOSE_SIGNATURE, signatureComposeController.getComposeSignature());
+        }
         outState.putIntegerArrayList(STATE_ACTIVE_IN_APP_NOTIFICATIONS, new ArrayList<>(activeInAppNotifications));
 
         replyToPresenter.onSaveInstanceState(outState);
@@ -763,6 +791,14 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         referencedMessageIds = savedInstanceState.getString(STATE_REFERENCES);
         changesMadeSinceLastSave = savedInstanceState.getBoolean(STATE_KEY_CHANGES_MADE_SINCE_LAST_SAVE);
         alreadyNotifiedUserOfEmptySubject = savedInstanceState.getBoolean(STATE_ALREADY_NOTIFIED_USER_OF_EMPTY_SUBJECT);
+        signatureChanged = savedInstanceState.getBoolean(STATE_SIGNATURE_CHANGED, false);
+        final String restoredSignature = savedInstanceState.getString(STATE_COMPOSE_SIGNATURE);
+        if (signatureComposeController != null && restoredSignature != null) {
+            signatureComposeController.setComposeSignature(restoredSignature, signatureChanged);
+            if (identity != null && signatureChanged) {
+                identity = identity.withSignature(restoredSignature).withSignatureUse(true);
+            }
+        }
         final List<Integer> activeInAppNotifications = savedInstanceState
                 .getIntegerArrayList(STATE_ACTIVE_IN_APP_NOTIFICATIONS);
         if (activeInAppNotifications != null && !activeInAppNotifications.isEmpty()) {
@@ -770,6 +806,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         }
 
         updateFrom();
+        updateSignature();
 
         updateMessageFormat();
     }
@@ -1085,7 +1122,6 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
         identityChanged = true;
         changesMadeSinceLastSave = true;
         updateFrom();
-        signatureChanged = false;
         updateSignature();
         updateMessageFormat();
         replyToPresenter.setIdentity(identity);
@@ -1111,14 +1147,24 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     }
 
     private void updateSignature() {
+        if (signatureComposeController != null) {
+            signatureComposeController.bindPosition(account.isSignatureBeforeQuotedText());
+            if (!signatureChanged) {
+                signatureComposeController.updateFromIdentity(identity);
+            } else {
+                signatureComposeController.setComposeSignature(
+                        signatureComposeController.getComposeSignature(),
+                        true
+                );
+            }
+            return;
+        }
         if (identity.getSignatureUse()) {
             String signature = identity.getSignature();
-            updatingSignature = true;
-            try {
-                signatureView.setSignature(signature);
-            } finally {
-                updatingSignature = false;
-            }
+            String displaySignature = SignatureContent.isHtml(signature)
+                    ? SignatureContent.toPlainText(signature)
+                    : CrLfConverter.toLf(signature);
+            signatureView.setText(displaySignature);
             signatureView.setVisibility(View.VISIBLE);
         } else {
             signatureView.setVisibility(View.GONE);
@@ -1126,14 +1172,18 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
     }
 
     private String resolveSignatureForSend() {
-        if (identity.getSignatureUse() && !signatureChanged && SignatureStorage.isHtml(identity.getSignature())) {
+        if (signatureComposeController != null) {
+            return signatureComposeController.resolveSignatureForSend();
+        }
+        if (identity.getSignatureUse() && !signatureChanged && SignatureContent.isHtml(identity.getSignature())) {
             return identity.getSignature();
         }
-        String signatureHtml = signatureView.getSignatureHtml();
-        if (SignatureStorage.isHtml(signatureHtml)) {
-            return signatureHtml;
-        }
-        return CrLfConverter.toCrLf(signatureView.getSignaturePlainText());
+        return CrLfConverter.toCrLf(signatureView.getText());
+    }
+
+    private void scheduleSignatureDraftSave() {
+        signatureDraftHandler.removeCallbacks(signatureDraftSaveRunnable);
+        signatureDraftHandler.postDelayed(signatureDraftSaveRunnable, SIGNATURE_DRAFT_SAVE_DELAY_MS);
     }
 
     @Override
@@ -1407,6 +1457,7 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
 
     public void saveDraftEventually() {
         changesMadeSinceLastSave = true;
+        scheduleSignatureDraftSave();
     }
 
     public void loadQuotedTextForEdit() {
@@ -1591,6 +1642,12 @@ public class MessageCompose extends BaseActivity implements OnClickListener,
                     .withSignatureUse(true)
                     .withSignature(k9identity.get(IdentityField.SIGNATURE));
             signatureChanged = true;
+            if (signatureComposeController != null) {
+                signatureComposeController.setComposeSignature(
+                        k9identity.get(IdentityField.SIGNATURE),
+                        true
+                );
+            }
         } else {
             if (message instanceof LocalMessage) {
                 newIdentity = newIdentity.withSignatureUse(((LocalMessage) message).getFolder().getSignatureUse());

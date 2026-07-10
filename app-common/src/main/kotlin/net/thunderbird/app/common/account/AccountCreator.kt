@@ -17,6 +17,7 @@ import com.fsck.k9.mail.store.imap.ImapStoreSettings.isSendClientInfo
 import com.fsck.k9.mail.store.imap.ImapStoreSettings.isUseCompression
 import com.fsck.k9.mail.store.imap.ImapStoreSettings.pathPrefix
 import com.fsck.k9.mailstore.SpecialLocalFoldersCreator
+import com.fsck.k9.message.html.SignatureContent
 import com.fsck.k9.preferences.UnifiedInboxConfigurator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,7 @@ internal class AccountCreator(
         newAccount.senderName = account.options.displayName
         if (account.options.emailSignature != null) {
             newAccount.signatureUse = true
-            newAccount.signature = account.options.emailSignature
+            newAccount.signature = SignatureContent.sanitizeForStorage(account.options.emailSignature)
         }
         newAccount.isNotifyNewMail = account.options.showNotification
         newAccount.automaticCheckIntervalMinutes = account.options.checkFrequencyInMinutes

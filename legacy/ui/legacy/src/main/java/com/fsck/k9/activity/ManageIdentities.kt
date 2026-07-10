@@ -43,6 +43,8 @@ import net.thunderbird.components.ui.bolt.theme.BoltTheme
 import net.thunderbird.core.android.account.Identity
 import net.thunderbird.core.android.account.LegacyAccountDto
 import net.thunderbird.core.ui.theme.api.FeatureThemeProvider
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import org.koin.android.ext.android.inject
 
 /**
@@ -89,7 +91,7 @@ class ManageIdentities : BaseActivity() {
         setContent {
             themeProvider.WithTheme {
                 ManageIdentitiesScreen(
-                    identities = account.identities.toList(),
+                    identities = account.identities.toImmutableList(),
                     identityFormatter = identityFormatter,
                     onBack = { finish() },
                     onAdd = { launchEditIdentity(identityIndex = -1, identity = null) },
@@ -155,7 +157,7 @@ class ManageIdentities : BaseActivity() {
 
 @Composable
 private fun ManageIdentitiesScreen(
-    identities: List<Identity>,
+    identities: ImmutableList<Identity>,
     identityFormatter: IdentityFormatter,
     onBack: () -> Unit,
     onAdd: () -> Unit,
@@ -220,6 +222,7 @@ private fun ManageIdentitiesScreen(
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun IdentityListItem(
     title: String,

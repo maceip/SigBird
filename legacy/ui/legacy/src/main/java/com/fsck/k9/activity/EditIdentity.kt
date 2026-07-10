@@ -113,6 +113,7 @@ class EditIdentity : BaseActivity() {
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun EditIdentityScreen(
     initialIdentity: Identity,

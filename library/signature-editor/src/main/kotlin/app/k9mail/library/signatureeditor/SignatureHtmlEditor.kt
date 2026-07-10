@@ -43,6 +43,7 @@ import net.thunderbird.components.ui.bolt.theme.BoltTheme
  * reliably render. Images are inlined as PNG/JPEG data URIs (no remote hosting UI).
  * Navigation and network loads are blocked inside the editor WebView.
  */
+@Suppress("LongMethod")
 @Composable
 fun SignatureHtmlEditor(
     html: String,
@@ -238,25 +239,41 @@ private fun createSignatureEditorWebView(
 private fun android.net.Uri.toInlineImageDataUri(context: android.content.Context): String? {
     return try {
         context.contentResolver.openInputStream(this)?.use { input ->
-            val bytes = input.readBytes()
-            if (bytes.isEmpty() || bytes.size > MAX_INLINE_IMAGE_BYTES) return null
-
-            val mime = context.contentResolver.getType(this)?.lowercase()
-            when (mime) {
-                "image/png" -> "data:image/png;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
-                "image/jpeg", "image/jpg" -> "data:image/jpeg;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
-                else -> {
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-                    val output = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-                    "data:image/png;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
-                }
-            }
+            encodeInlineImageDataUri(context, this, input.readBytes())
         }
     } catch (_: Exception) {
         null
     }
 }
 
+private fun encodeInlineImageDataUri(
+    context: android.content.Context,
+    uri: android.net.Uri,
+    bytes: ByteArray,
+): String? {
+    if (bytes.isEmpty() || bytes.size > MAX_INLINE_IMAGE_BYTES) {
+        return null
+    }
+
+    val mime = context.contentResolver.getType(uri)?.lowercase()
+    return when (mime) {
+        "image/png" -> toDataUri("image/png", bytes)
+        "image/jpeg", "image/jpg" -> toDataUri("image/jpeg", bytes)
+        else -> encodeBitmapAsPngDataUri(bytes)
+    }
+}
+
+private fun encodeBitmapAsPngDataUri(bytes: ByteArray): String? {
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+    val output = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, PNG_COMPRESS_QUALITY, output)
+    return toDataUri("image/png", output.toByteArray())
+}
+
+private fun toDataUri(mimeType: String, bytes: ByteArray): String {
+    return "data:$mimeType;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+}
+
 private const val EDITOR_MIN_HEIGHT_DP = 160
 private const val MAX_INLINE_IMAGE_BYTES = 1_500_000
+private const val PNG_COMPRESS_QUALITY = 100

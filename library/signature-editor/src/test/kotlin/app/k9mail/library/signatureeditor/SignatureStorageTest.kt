@@ -12,7 +12,18 @@ class SignatureStorageTest {
     @Test
     fun `isHtml detects common tags`() {
         assertThat(SignatureStorage.isHtml("<div>Hi</div>")).isTrue()
+        assertThat(SignatureStorage.isHtml("<script>alert(1)</script>")).isTrue()
         assertThat(SignatureStorage.isHtml("Plain text")).isFalse()
+        assertThat(SignatureStorage.isHtml("<user@example.com>")).isFalse()
+    }
+
+    @Test
+    fun `sanitizeForStorage empties entirely unsafe html`() {
+        val html = """<script>alert(1)</script><img src="https://evil.example/track.png">"""
+
+        val result = SignatureStorage.sanitizeForStorage(html).orEmpty()
+
+        assertThat(result.isBlank()).isTrue()
     }
 
     @Test

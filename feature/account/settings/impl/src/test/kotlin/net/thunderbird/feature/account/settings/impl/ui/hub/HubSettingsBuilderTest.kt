@@ -9,6 +9,7 @@ import kotlinx.collections.immutable.persistentListOf
 import net.thunderbird.core.common.resources.StringsResourceManager
 import net.thunderbird.core.ui.setting.SettingValue
 import net.thunderbird.core.ui.setting.SettingValue.Select.SelectOption
+import java.util.UUID
 import net.thunderbird.feature.account.AccountIdFactory
 import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomainContract.AccountProfileSummary
 
@@ -24,14 +25,17 @@ class HubSettingsBuilderTest {
 
     @Test
     fun `build should include account selector and all hub sections`() {
-        val accountId = AccountIdFactory.of("account-1")
+        val accountId = AccountIdFactory.of(UUID.randomUUID().toString())
         val state = HubSettingsContract.State(
             subtitle = "Test",
             accounts = persistentListOf(
                 AccountProfileSummary(accountId = accountId, name = "Test"),
-                AccountProfileSummary(accountId = AccountIdFactory.of("account-2"), name = "Other"),
+                AccountProfileSummary(
+                    accountId = AccountIdFactory.of(UUID.randomUUID().toString()),
+                    name = "Other",
+                ),
             ),
-            selectedAccount = SelectOption(accountId.value) { "Test" },
+            selectedAccount = SelectOption(accountId.value.toString()) { "Test" },
         )
 
         val settings = testSubject.build(state) { }

@@ -10,6 +10,7 @@ import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomai
 internal class GetRemoteFolderSettings(
     private val folderProvider: AccountSettingsFolderProvider,
 ) : UseCase.GetRemoteFolderSettings {
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun invoke(
         accountId: AccountId,
     ): Outcome<RemoteFolderSettingsInfo, AccountSettingsDomainContract.AccountSettingError> {

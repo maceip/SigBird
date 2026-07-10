@@ -31,6 +31,7 @@ internal fun HubSettingsScreen(
     val (state, dispatch) = viewModel.observe { effect ->
         when (effect) {
             HubSettingsContract.Effect.NavigateBack -> onBack()
+
             is HubSettingsContract.Effect.NavigateToAccount -> {
                 FeatureLauncherActivity.launch(
                     context = context,
@@ -38,34 +39,42 @@ internal fun HubSettingsScreen(
                 )
                 activity.finish()
             }
+
             HubSettingsContract.Effect.NavigateToGeneral -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToReadingMail -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountReadingMailSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToFetchingMail -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountFetchingMailSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToComposition -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountCompositionMailSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToFolders -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountFolderSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToNotifications -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountNotificationSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToSearch -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountSearchSettings("${accountId.value}"),
             )
+
             HubSettingsContract.Effect.NavigateToCrypto -> launchSubScreen(
                 context = context,
                 target = FeatureLauncherTarget.AccountCryptoSettings("${accountId.value}"),

@@ -19,6 +19,7 @@ import net.thunderbird.core.ui.setting.SettingViewProvider
 import net.thunderbird.feature.account.settings.R
 import net.thunderbird.feature.notification.NotificationVibration
 
+@Suppress("LongMethod")
 @Composable
 internal fun NotificationSettingsContent(
     state: NotificationSettingsContract.State,
@@ -106,24 +107,30 @@ private fun handleSettingChange(
             NotificationSettingId.NOTIFY_NEW_MAIL -> onEvent(
                 NotificationSettingsContract.Event.OnNotifyNewMailToggle(setting.value),
             )
+
             NotificationSettingId.NOTIFY_SELF -> onEvent(
                 NotificationSettingsContract.Event.OnNotifySelfToggle(setting.value),
             )
+
             NotificationSettingId.NOTIFY_CONTACTS_ONLY -> onEvent(
                 NotificationSettingsContract.Event.OnNotifyContactsOnlyToggle(setting.value),
             )
+
             NotificationSettingId.IGNORE_CHAT_MESSAGES -> onEvent(
                 NotificationSettingsContract.Event.OnIgnoreChatMessagesToggle(setting.value),
             )
+
             NotificationSettingId.NOTIFY_SYNC -> onEvent(
                 NotificationSettingsContract.Event.OnNotifySyncToggle(setting.value),
             )
         }
+
         is SettingValue.Select -> when (setting.id) {
             NotificationSettingId.NOTIFICATION_LIGHT -> onEvent(
                 NotificationSettingsContract.Event.OnNotificationLightChange(setting.value),
             )
         }
+
         else -> Unit
     }
 }

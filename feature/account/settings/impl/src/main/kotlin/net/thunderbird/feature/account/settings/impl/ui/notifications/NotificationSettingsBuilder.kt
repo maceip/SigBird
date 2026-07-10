@@ -11,6 +11,7 @@ internal class NotificationSettingsBuilder(
     private val resources: StringsResourceManager,
     private val optionsMapper: NotificationSettingsOptionsMapper,
 ) : NotificationSettingsContract.SettingsBuilder {
+    @Suppress("LongMethod")
     override fun build(
         state: NotificationSettingsContract.State,
         onEvent: (NotificationSettingsContract.Event) -> Unit,
@@ -79,7 +80,9 @@ internal class NotificationSettingsBuilder(
             settings += SettingValue.ActionText(
                 id = NotificationSettingId.MESSAGES_CHANNEL,
                 title = { resources.stringResource(R.string.account_settings_notification_channel_messages) },
-                description = { resources.stringResource(R.string.account_settings_notification_channel_messages_summary) },
+                description = {
+                    resources.stringResource(R.string.account_settings_notification_channel_messages_summary)
+                },
                 value = "",
                 onClick = { onEvent(NotificationSettingsContract.Event.OnMessagesChannelClick) },
             )

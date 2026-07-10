@@ -53,6 +53,7 @@ internal fun NotificationSettingsScreen(
     val (state, dispatch) = viewModel.observe { effect ->
         when (effect) {
             NotificationSettingsContract.Effect.NavigateBack -> onBack()
+
             is NotificationSettingsContract.Effect.LaunchRingtonePicker -> {
                 val intent = android.content.Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
                     .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
@@ -68,9 +69,11 @@ internal fun NotificationSettingsScreen(
                     )
                 ringtonePicker.launch(intent)
             }
+
             NotificationSettingsContract.Effect.ShowVibrationDialog -> {
                 showVibrationDialog = true
             }
+
             is NotificationSettingsContract.Effect.LaunchNotificationChannel -> {
                 notificationBridge.openNotificationChannelSettings(context, effect.channelId)
             }

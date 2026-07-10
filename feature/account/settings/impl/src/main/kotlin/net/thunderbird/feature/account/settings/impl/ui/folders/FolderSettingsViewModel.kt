@@ -40,36 +40,43 @@ internal class FolderSettingsViewModel(
     override fun event(event: FolderSettingsContract.Event) {
         when (event) {
             FolderSettingsContract.Event.OnBackPressed -> emitEffect(FolderSettingsContract.Effect.NavigateBack)
+
             is FolderSettingsContract.Event.OnAutoExpandFolderChange -> updateFolder(
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand.UpdateAutoExpandFolder(
                     folderId = FolderOptionEncoding.folderId(event.option.id),
                 ),
                 onSuccess = { updateState { it.copy(autoExpandFolder = event.option) } },
             )
+
             is FolderSettingsContract.Event.OnSubscribedFoldersOnlyToggle -> updateFolder(
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand.UpdateSubscribedFoldersOnly(event.enabled),
                 onSuccess = { updateState { it.copy(subscribedFoldersOnly = event.enabled) } },
             )
+
             is FolderSettingsContract.Event.OnArchiveFolderChange -> updateSpecialFolder(
                 event.option,
                 FolderType.ARCHIVE,
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand::UpdateArchiveFolder,
             )
+
             is FolderSettingsContract.Event.OnDraftsFolderChange -> updateSpecialFolder(
                 event.option,
                 FolderType.DRAFTS,
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand::UpdateDraftsFolder,
             )
+
             is FolderSettingsContract.Event.OnSentFolderChange -> updateSpecialFolder(
                 event.option,
                 FolderType.SENT,
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand::UpdateSentFolder,
             )
+
             is FolderSettingsContract.Event.OnSpamFolderChange -> updateSpecialFolder(
                 event.option,
                 FolderType.SPAM,
                 AccountSettingsDomainContract.UpdateFolderSettingsCommand::UpdateSpamFolder,
             )
+
             is FolderSettingsContract.Event.OnTrashFolderChange -> updateSpecialFolder(
                 event.option,
                 FolderType.TRASH,

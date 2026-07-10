@@ -18,8 +18,8 @@ import net.thunderbird.feature.account.avatar.DefaultAvatarIconCatalog
 import net.thunderbird.feature.account.avatar.DefaultAvatarMonogramCreator
 import net.thunderbird.feature.account.core.AccountCoreExternalContract.AccountProfileLocalDataSource
 import net.thunderbird.feature.account.core.featureAccountCoreModule
-import net.thunderbird.feature.account.settings.api.AccountSettingsCryptoBridge
 import net.thunderbird.feature.account.settings.api.AccountSettingsCapabilities
+import net.thunderbird.feature.account.settings.api.AccountSettingsCryptoBridge
 import net.thunderbird.feature.account.settings.api.AccountSettingsFolderProvider
 import net.thunderbird.feature.account.settings.api.AccountSettingsFolderRefresh
 import net.thunderbird.feature.account.settings.api.AccountSettingsLegacyNavigation

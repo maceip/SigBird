@@ -25,6 +25,7 @@ import net.thunderbird.feature.account.settings.R
 import net.thunderbird.feature.notification.NotificationVibration
 import net.thunderbird.feature.notification.VibratePattern
 
+@Suppress("LongMethod")
 @Composable
 internal fun VibrationSettingsDialog(
     vibration: NotificationVibration,

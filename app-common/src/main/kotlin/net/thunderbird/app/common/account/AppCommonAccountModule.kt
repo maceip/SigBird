@@ -79,7 +79,9 @@ internal val appCommonAccountModule = module {
     }
 
     single<AccountSettingsCryptoBridge> {
-        DefaultAccountSettingsCryptoBridge()
+        DefaultAccountSettingsCryptoBridge(
+            accountManager = get(),
+        )
     }
 
     factory<FolderDisplayNameFormatter> {

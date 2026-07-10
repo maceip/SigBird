@@ -42,6 +42,7 @@ dependencies {
     implementation(projects.feature.account.avatar.api)
     implementation(projects.feature.account.avatar.impl)
     implementation(projects.feature.account.settings.api)
+    implementation(projects.feature.account.settings.impl)
     implementation(projects.feature.account.setup)
     implementation(projects.feature.mail.account.api)
     implementation(projects.feature.mail.message.composer)
@@ -60,6 +61,8 @@ dependencies {
     implementation(projects.backend.imap)
 
     implementation(projects.feature.thundermail.internal.common)
+
+    implementation(projects.plugins.openpgpApiLib.openpgpApi)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.lifecycle.process)

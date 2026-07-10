@@ -17,6 +17,8 @@ class SignatureContentTest {
     @Test
     fun `html signature is detected`() {
         assertThat(SignatureContent.isHtml("<div><b>Jane</b></div>")).isTrue()
+        assertThat(SignatureContent.isHtml("<script>alert(1)</script>")).isTrue()
+        assertThat(SignatureContent.isHtml("<user@example.com>")).isFalse()
     }
 
     @Test

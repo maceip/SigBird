@@ -9,11 +9,16 @@ import kotlin.jvm.JvmStatic
 object SignatureStorage {
     private val htmlSanitizer = SignatureHtmlSanitizer()
 
+    /**
+     * Detects HTML markup (including unsafe tags like script). Detection is intentionally
+     * broader than the sanitizer allow-list so entirely-unsafe HTML is still classified as
+     * HTML and can be rejected after sanitization empties it.
+     *
+     * Requires a tag-like boundary (`\s`, `/`, or `>`) so plain `user@example.com` in angle
+     * brackets is not treated as HTML.
+     */
     private val HTML_TAG_REGEX = Regex(
-        pattern = """
-            (?i)^\s*(?:<!DOCTYPE\s+html\b|<html\b|<body\b|<div\b|<p\b|<span\b|<br\b|
-            <img\b|<table\b|<b\b|<i\b|<u\b|<strong\b|<em\b|<a\b|<font\b)
-        """.trimIndent().replace("\n", ""),
+        pattern = """(?i)^\s*(?:<!DOCTYPE\s+html\b|<!--|</?[a-zA-Z][a-zA-Z0-9]*(?:\s|/|>))""",
     )
 
     @JvmStatic

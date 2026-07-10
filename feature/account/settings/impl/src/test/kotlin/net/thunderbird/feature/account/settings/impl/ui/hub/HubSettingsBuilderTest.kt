@@ -4,12 +4,12 @@ import assertk.assertThat
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
 import assertk.assertions.isInstanceOf
+import java.util.UUID
 import kotlin.test.Test
 import kotlinx.collections.immutable.persistentListOf
 import net.thunderbird.core.common.resources.StringsResourceManager
 import net.thunderbird.core.ui.setting.SettingValue
 import net.thunderbird.core.ui.setting.SettingValue.Select.SelectOption
-import java.util.UUID
 import net.thunderbird.feature.account.AccountIdFactory
 import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomainContract.AccountProfileSummary
 

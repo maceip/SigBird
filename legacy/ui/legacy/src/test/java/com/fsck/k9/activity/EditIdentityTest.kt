@@ -8,9 +8,9 @@ import com.fsck.k9.K9RobolectricTest
 import com.fsck.k9.Preferences
 import java.util.UUID
 import net.thunderbird.core.android.account.Identity
+import net.thunderbird.core.common.mail.AuthType
 import net.thunderbird.core.common.mail.ConnectionSecurity
 import net.thunderbird.core.common.mail.ServerSettings
-import net.thunderbird.core.common.mail.AuthType
 import org.junit.Test
 import org.robolectric.Robolectric
 

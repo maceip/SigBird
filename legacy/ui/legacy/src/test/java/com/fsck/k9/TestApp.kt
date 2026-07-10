@@ -33,7 +33,6 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
-import androidx.compose.runtime.Composable
 
 class TestApp : Application() {
     override fun onCreate() {

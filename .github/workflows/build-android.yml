@@ -24,10 +24,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  build-common:
-    name: Build - Common code
+  android-ci:
+    name: Build - Android
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout the repo
@@ -52,81 +52,17 @@ jobs:
       - name: Assemble common
         run: ./gradlew :app-common:assemble
 
-      - name: Show disk usage
-        uses: ./.github/actions/disk-usage
+      - name: Build applications
+        run: |
+          ./gradlew :app-k9mail:assemble -Pci=true
+          ./gradlew :app-thunderbird:assemble -Pci=true
+          ./gradlew -p components :ui:catalog:assembleDebug
 
-  build-k9:
-    name: Build - K9 application
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [build-common]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Build K9 application
-        run: ./gradlew :app-k9mail:assemble -Pci=true
-
-  check-badging-k9:
-    name: Check - K9 badging
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [ build-common ]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Check K9 Badging
+      - name: Check badging
         run: |
           ./gradlew :app-k9mail:checkFossReleaseBadging \
                     :app-k9mail:checkFullReleaseBadging \
-                    -x assemble \
-                    -x build
-
-  build-thunderbird:
-    name: Build - Thunderbird application
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [build-common]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Build Thunderbird application
-        run: ./gradlew :app-thunderbird:assemble -Pci=true
-
-  check-badging-thunderbird:
-    name: Check - Thunderbird badging
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [ build-common ]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Check Thunderbird Badging
-        run: |
-          ./gradlew :app-thunderbird:checkFossBetaBadging \
+                    :app-thunderbird:checkFossBetaBadging \
                     :app-thunderbird:checkFossDailyBadging \
                     :app-thunderbird:checkFossReleaseBadging \
                     :app-thunderbird:checkFullBetaBadging \
@@ -135,53 +71,11 @@ jobs:
                     -x assemble \
                     -x build
 
-  build-ui-catalog:
-    name: Build - UI-catalog application
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [build-common]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Build App UI-catalog application in Debug mode
-        run: ./gradlew -p components :ui:catalog:assembleDebug
-
-  quality-unit-test:
-    name: Quality - Unit tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [build-common]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Running unit tests
+      - name: Unit tests
         run: ./gradlew testsOnCi --parallel
 
-  quality-lint:
-    name: Quality - Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [build-common]
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Running Android lint
+      - name: Android lint
         run: ./gradlew lint
+
+      - name: Show disk usage
+        uses: ./.github/actions/disk-usage

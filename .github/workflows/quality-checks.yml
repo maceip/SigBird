@@ -24,10 +24,10 @@ permissions:
   contents: read
 
 jobs:
-  quality-spotless:
-    name: Spotless check
+  quality-checks:
+    name: Quality - Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout the repo
@@ -37,66 +37,24 @@ jobs:
 
       - name: Setup Gradle environment
         uses: ./.github/actions/setup-gradle
+        with:
+          write-cache: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Quality - Spotless
+      - name: Spotless
         run: ./gradlew spotlessCheck
 
-  quality-detekt:
-    name: Detekt check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Quality - Detekt
+      - name: Detekt
         run: ./gradlew detekt
 
-      - name: Running Detekt including KMP
-        # As we were not verifying detekt in KMP sources before,
-        # this step is likely to fail.
+      - name: Detekt (KMP metadata)
         continue-on-error: true
         run: |
           ./gradlew detektMetadataCommonMain
           ./gradlew detektMetadataMain
           ./gradlew detektMetadataCommonJvmMain
 
-  quality-dependency-guard:
-    name: Dependency guard check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Quality - Dependency guard
+      - name: Dependency guard
         run: ./gradlew dependencyGuard
 
-  quality-konsist:
-    name: Konsist check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Gradle environment
-        uses: ./.github/actions/setup-gradle
-
-      - name: Quality - Konsist
+      - name: Konsist
         run: ./gradlew :quality:konsist:test

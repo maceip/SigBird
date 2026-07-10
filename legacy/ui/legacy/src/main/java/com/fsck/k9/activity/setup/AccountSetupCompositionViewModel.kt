@@ -1,12 +1,12 @@
 package com.fsck.k9.activity.setup
 
+import app.k9mail.library.signatureeditor.SignatureStorage
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Effect
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.Event
 import com.fsck.k9.activity.setup.AccountSetupCompositionContract.State
 import com.fsck.k9.message.html.SignatureContent
 import com.fsck.k9.ui.R
-import app.k9mail.library.signatureeditor.SignatureStorage
 import kotlinx.collections.immutable.persistentListOf
 import net.thunderbird.core.android.account.LegacyAccount
 import net.thunderbird.core.android.account.LegacyAccountManager

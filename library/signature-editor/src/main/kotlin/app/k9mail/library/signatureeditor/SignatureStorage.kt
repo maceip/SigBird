@@ -40,11 +40,10 @@ object SignatureStorage {
      * an editor so previously-saved phone photos do not freeze the UI.
      */
     @JvmStatic
-    fun prepareForEditing(signature: String?): String {
-        if (signature.isNullOrBlank()) return signature.orEmpty()
-        if (!isHtml(signature)) return signature
-        val optimized = SignatureInlineImages.optimizeHtml(signature)
-        return htmlSanitizer.sanitize(optimized)
+    fun prepareForEditing(signature: String?): String = when {
+        signature.isNullOrBlank() -> signature.orEmpty()
+        !isHtml(signature) -> signature
+        else -> htmlSanitizer.sanitize(SignatureInlineImages.optimizeHtml(signature))
     }
 
     @JvmStatic

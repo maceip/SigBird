@@ -1,0 +1,42 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Open Composition defaults for the first account from the mail list
+#
+# Path: Drawer → Settings → Account → Sending mail → Composition defaults
+
+## Open drawer
+- tapOn: "Navigate up"
+
+## Open settings
+- tapOn:
+    text: "Settings"
+
+## Open first account settings (first account under Accounts section)
+- scrollUntilVisible:
+    element:
+      text: ".*@.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: ".*@.*"
+    index: 0
+
+## Open Sending mail section
+- scrollUntilVisible:
+    element:
+      id: "android:id/title"
+      text: "Sending mail"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "android:id/title"
+    text: "Sending mail"
+
+## Open Composition defaults
+- tapOn:
+    id: "android:id/title"
+    text: "Composition defaults"
+
+## Verify composition defaults screen
+- assertVisible:
+    id: "composition_defaults_screen"

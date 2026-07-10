@@ -9,6 +9,8 @@ import android.widget.AdapterView
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceFragmentCompat.OnPreferenceStartScreenCallback
 import androidx.preference.PreferenceScreen
+import app.k9mail.feature.launcher.FeatureLauncherActivity
+import app.k9mail.feature.launcher.FeatureLauncherTarget
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.BaseActivity
 import com.fsck.k9.ui.base.extensions.fragmentTransaction
@@ -21,17 +23,13 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
     private val accountViewModel: AccountSettingsViewModel by viewModel()
     private lateinit var accountUuid: String
     private var startScreenKey: String? = null
+    private var legacyOnly = false
     private var fragmentAdded = false
 
     private lateinit var accountSpinner: AccountSelectionSpinner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setLayout(R.layout.activity_account_settings)
-
-        accountSpinner = findViewById(R.id.accountSpinner)
-
-        initializeActionBar()
 
         if (!decodeArguments()) {
             Log.d("Invalid arguments")
@@ -39,7 +37,30 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
             return
         }
 
+        if (!legacyOnly && redirectToComposeScreen(startScreenKey)) {
+            finish()
+            return
+        }
+
+        setLayout(R.layout.activity_account_settings)
+
+        accountSpinner = findViewById(R.id.accountSpinner)
+
+        initializeActionBar()
+
         loadAccount()
+    }
+
+    private fun redirectToComposeScreen(screenKey: String?): Boolean {
+        val target = when (screenKey) {
+            PREFERENCE_FOLDERS -> FeatureLauncherTarget.AccountFolderSettings(accountUuid)
+            PREFERENCE_NOTIFICATIONS -> FeatureLauncherTarget.AccountNotificationSettings(accountUuid)
+            PREFERENCE_OPENPGP -> FeatureLauncherTarget.AccountCryptoSettings(accountUuid)
+            null, PREFERENCE_MAIN -> FeatureLauncherTarget.AccountSettingsHub(accountUuid)
+            else -> return false
+        }
+        FeatureLauncherActivity.launch(context = this, target = target)
+        return true
     }
 
     private fun initializeActionBar() {
@@ -62,7 +83,10 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
 
     private fun onAccountSelected(selectedAccountUuid: String) {
         if (selectedAccountUuid != accountUuid && !isFinishing) {
-            start(this, selectedAccountUuid)
+            FeatureLauncherActivity.launch(
+                context = this,
+                target = FeatureLauncherTarget.AccountSettingsHub(selectedAccountUuid),
+            )
             finish()
         }
     }
@@ -70,6 +94,7 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
     private fun decodeArguments(): Boolean {
         accountUuid = intent.getStringExtra(ARG_ACCOUNT_UUID) ?: return false
         startScreenKey = intent.getStringExtra(ARG_START_SCREEN_KEY)
+        legacyOnly = intent.getBooleanExtra(ARG_LEGACY_ONLY, false)
         return true
     }
 
@@ -109,6 +134,10 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
         caller: PreferenceFragmentCompat,
         preferenceScreen: PreferenceScreen,
     ): Boolean {
+        if (!legacyOnly && redirectToComposeScreen(preferenceScreen.key)) {
+            return true
+        }
+
         fragmentTransactionWithBackStack {
             replace(R.id.accountSettingsContainer, AccountSettingsFragment.create(accountUuid, preferenceScreen.key))
         }
@@ -124,6 +153,11 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
     companion object {
         private const val ARG_ACCOUNT_UUID = "accountUuid"
         private const val ARG_START_SCREEN_KEY = "startScreen"
+        private const val ARG_LEGACY_ONLY = "legacyOnly"
+        private const val PREFERENCE_MAIN = "main"
+        private const val PREFERENCE_FOLDERS = "folders"
+        private const val PREFERENCE_NOTIFICATIONS = "notifications"
+        private const val PREFERENCE_OPENPGP = "openpgp"
 
         @JvmStatic
         @JvmOverloads
@@ -137,7 +171,20 @@ class AccountSettingsActivity : BaseActivity(), OnPreferenceStartScreenCallback 
 
         @JvmStatic
         fun startCryptoSettings(context: Context, accountUuid: String) {
-            start(context, accountUuid, AccountSettingsFragment.PREFERENCE_OPENPGP)
+            FeatureLauncherActivity.launch(
+                context = context,
+                target = FeatureLauncherTarget.AccountCryptoSettings(accountUuid),
+            )
+        }
+
+        @JvmStatic
+        fun startLegacyOpenPgpKeySelector(context: Context, accountUuid: String) {
+            val intent = Intent(context, AccountSettingsActivity::class.java).apply {
+                putExtra(ARG_ACCOUNT_UUID, accountUuid)
+                putExtra(ARG_START_SCREEN_KEY, PREFERENCE_OPENPGP)
+                putExtra(ARG_LEGACY_ONLY, true)
+            }
+            context.startActivity(intent)
         }
     }
 }

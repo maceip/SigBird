@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   require-report-label:
+    if: github.repository_owner == 'thunderbird'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

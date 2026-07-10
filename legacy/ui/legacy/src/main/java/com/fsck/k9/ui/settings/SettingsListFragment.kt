@@ -20,7 +20,6 @@ import app.k9mail.feature.launcher.FeatureLauncherActivity
 import app.k9mail.feature.launcher.FeatureLauncherTarget
 import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.livedata.observeNotNull
-import com.fsck.k9.ui.settings.account.AccountSettingsActivity
 import com.fsck.k9.view.DraggableFrameLayout
 import com.mikepenz.fastadapter.FastAdapter
 import com.mikepenz.fastadapter.GenericItem
@@ -189,7 +188,10 @@ class SettingsListFragment : Fragment(), ItemTouchCallback {
     }
 
     private fun launchAccountSettings(account: LegacyAccountDto) {
-        AccountSettingsActivity.start(requireActivity(), account.uuid)
+        FeatureLauncherActivity.launch(
+            context = requireActivity(),
+            target = FeatureLauncherTarget.AccountSettingsHub(account.uuid),
+        )
     }
 
     private fun launchOnboarding() {

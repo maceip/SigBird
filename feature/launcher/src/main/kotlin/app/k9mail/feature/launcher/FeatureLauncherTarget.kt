@@ -32,6 +32,10 @@ sealed class FeatureLauncherTarget(
         deepLinkUri = AccountSettingsRoute.GeneralSettings(accountUuid).route().toUri(),
     )
 
+    data class AccountSettingsHub(val accountUuid: String) : FeatureLauncherTarget(
+        deepLinkUri = AccountSettingsRoute.Hub(accountUuid).route().toUri(),
+    )
+
     data class AccountReadingMailSettings(val accountUuid: String) : FeatureLauncherTarget(
         deepLinkUri = AccountSettingsRoute.ReadingMailSettings(accountUuid).route().toUri(),
     )
@@ -46,6 +50,22 @@ sealed class FeatureLauncherTarget(
 
     data class AccountSearchSettings(val accountUuid: String) : FeatureLauncherTarget(
         deepLinkUri = AccountSettingsRoute.SearchSettings(accountUuid).route().toUri(),
+    )
+
+    data class AccountCompositionMailSettings(val accountUuid: String) : FeatureLauncherTarget(
+        deepLinkUri = AccountSettingsRoute.CompositionMailSettings(accountUuid).route().toUri(),
+    )
+
+    data class AccountFolderSettings(val accountUuid: String) : FeatureLauncherTarget(
+        deepLinkUri = AccountSettingsRoute.FolderSettings(accountUuid).route().toUri(),
+    )
+
+    data class AccountNotificationSettings(val accountUuid: String) : FeatureLauncherTarget(
+        deepLinkUri = AccountSettingsRoute.NotificationSettings(accountUuid).route().toUri(),
+    )
+
+    data class AccountCryptoSettings(val accountUuid: String) : FeatureLauncherTarget(
+        deepLinkUri = AccountSettingsRoute.CryptoSettings(accountUuid).route().toUri(),
     )
 
     data object Funding : FeatureLauncherTarget(

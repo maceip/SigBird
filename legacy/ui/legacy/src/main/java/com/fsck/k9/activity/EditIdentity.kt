@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.IntentCompat
 import androidx.core.os.BundleCompat
+import androidx.core.os.BundleCompat
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.Preferences
 import com.fsck.k9.message.html.SignatureContent
@@ -103,7 +104,9 @@ class EditIdentity : BaseActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        // Identity edits are held in Compose state; nothing additional to persist here.
+        IntentCompat.getParcelableExtra(intent, EXTRA_IDENTITY, Identity::class.java)?.let { identity ->
+            outState.putParcelable(EXTRA_IDENTITY, identity)
+        }
     }
 
     companion object {

@@ -1,0 +1,37 @@
+---
+name: Validate - PR
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        type: boolean
+        description: Dry run (SHA pin validation only)
+        default: true
+      debug:
+        type: boolean
+        description: Debug mode (SHA pin validation only)
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr:
+    name: Validate - PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Ensure GitHub actions are SHA pinned
+        env:
+          DRY_RUN: ${{ !inputs.dryRun && '--no-dry-run' || '' }}
+          DEBUG: ${{ inputs.debug && '--debug' || '' }}
+        run: bash scripts/ci/validate-github-actions-pinned.sh $DRY_RUN $DEBUG

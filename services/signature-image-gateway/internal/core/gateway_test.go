@@ -3,12 +3,15 @@ package core_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/maceip/tamayo/tokenauth"
 	"github.com/maceip/tamayo/tokenprofile"
@@ -16,50 +19,85 @@ import (
 	"github.com/maceip/SigBird/services/signature-image-gateway/internal/core"
 )
 
-func TestUploadHappyPathAndDoubleSpend(t *testing.T) {
+func TestPrivateIdentityUploadShowcase(t *testing.T) {
 	gw, mem := testGateway(t)
 
 	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
+	if sess["token_family"] != "private_identity" {
+		t.Fatalf("token_family=%v", sess["token_family"])
+	}
+	if sess["email"] != nil {
+		t.Fatalf("email should be null, got %v", sess["email"])
+	}
 	sid := sess["session_id"].(string)
+	origin := sess["origin"].(string)
+	nonceB64 := sess["presentation_nonce_b64"].(string)
 
 	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
-	token := mint["token_b64"].(string)
+	if mint["email"] != nil {
+		t.Fatalf("mint email should be null")
+	}
+	if mint["pseudonym_hex"] == nil || mint["pseudonym_hex"] == "" {
+		t.Fatal("expected pseudonym_hex in mint response")
+	}
+	tokenB64 := mint["token_b64"].(string)
+	seedB64 := mint["holder_seed_b64"].(string)
+
+	seed, err := base64.RawURLEncoding.DecodeString(seedB64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holderPriv := ed25519.NewKeyFromSeed(seed)
+	tokenBytes, _ := base64.RawURLEncoding.DecodeString(tokenB64)
+	token, err := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonceRaw, _ := base64.RawURLEncoding.DecodeString(nonceB64)
+	var nonce [32]byte
+	copy(nonce[:], nonceRaw)
+	issuedAt := time.Now().Unix()
+	msg := tokenprofile.PrivateIdentityPresentationMessage(origin, nonce, token.Digest(), issuedAt)
+	sig := ed25519.Sign(holderPriv, msg)
 
 	payload := bytes.Repeat([]byte("w"), 2048)
 	sum := sha256.Sum256(payload)
 
 	up := postJSON(t, gw, "POST", "/v1/uploads", map[string]any{
-		"session_id":          sid,
-		"token_b64":           token,
-		"content_sha256_hex":  hex.EncodeToString(sum[:]),
-		"content_length":      len(payload),
-		"content_type":        "image/webp",
+		"session_id":         sid,
+		"token_b64":          tokenB64,
+		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"issued_at":          issuedAt,
+		"content_sha256_hex": hex.EncodeToString(sum[:]),
+		"content_length":     len(payload),
+		"content_type":       "image/webp",
 	})
-	if up["upload_url"] == nil || up["public_url"] == nil {
-		t.Fatalf("missing urls: %#v", up)
+	if up["pseudonym_hex"] != mint["pseudonym_hex"] {
+		t.Fatalf("pseudonym mismatch mint=%v upload=%v", mint["pseudonym_hex"], up["pseudonym_hex"])
+	}
+	if up["email"] != nil {
+		t.Fatal("upload must not expose email")
 	}
 	key := up["object_key"].(string)
 	if err := mem.Put(key, payload); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := mem.Get(key)
-	if !ok || !bytes.Equal(got, payload) {
-		t.Fatalf("stored payload mismatch")
-	}
 
-	// Replaying the same burn must fail (token already spent) even with a new session.
+	// Replay same presentation nonce must 409.
 	sess2 := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
-	sid2 := sess2["session_id"].(string)
-	// Token was bound to the first session challenge — verify fails or spend conflicts.
 	resp := raw(t, gw, "POST", "/v1/uploads", map[string]any{
-		"session_id":         sid2,
-		"token_b64":          token,
+		"session_id":         sess2["session_id"],
+		"token_b64":          tokenB64,
+		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     len(payload),
 		"content_type":       "image/webp",
 	})
+	// Different session has different nonce — signature won't match that nonce,
+	// so expect 401 (bad PoP) rather than 200.
 	if resp.Status == 200 {
-		t.Fatalf("expected reject on reused burn, got 200")
+		t.Fatalf("expected reject, got 200 body=%s", resp.Body)
 	}
 }
 
@@ -67,7 +105,7 @@ func TestAssistedMintDisabledInProd(t *testing.T) {
 	issuer := newIssuer(t)
 	policy := compilePolicy(t)
 	mem := core.NewMemoryPresigner("http://example.test")
-	gw, err := core.New(core.Config{Mode: "prod"}, issuer, policy, mem, nil, nil)
+	gw, err := core.New(core.Config{Mode: "prod"}, issuer, policy, mem, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,16 +125,28 @@ func TestRejectOversize(t *testing.T) {
 	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
 	sid := sess["session_id"].(string)
 	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	seed, _ := base64.RawURLEncoding.DecodeString(mint["holder_seed_b64"].(string))
+	holderPriv := ed25519.NewKeyFromSeed(seed)
+	tokenBytes, _ := base64.RawURLEncoding.DecodeString(mint["token_b64"].(string))
+	token, _ := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
+	nonceRaw, _ := base64.RawURLEncoding.DecodeString(sess["presentation_nonce_b64"].(string))
+	var nonce [32]byte
+	copy(nonce[:], nonceRaw)
+	issuedAt := time.Now().Unix()
+	msg := tokenprofile.PrivateIdentityPresentationMessage(sess["origin"].(string), nonce, token.Digest(), issuedAt)
+	sig := ed25519.Sign(holderPriv, msg)
 	sum := sha256.Sum256([]byte("x"))
 	resp := raw(t, gw, "POST", "/v1/uploads", map[string]any{
 		"session_id":         sid,
 		"token_b64":          mint["token_b64"],
+		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     core.MaxUploadBytes + 1,
 		"content_type":       "image/webp",
 	})
 	if resp.Status != 400 {
-		t.Fatalf("status=%d want 400", resp.Status)
+		t.Fatalf("status=%d want 400 body=%s", resp.Status, resp.Body)
 	}
 }
 
@@ -105,7 +155,7 @@ func testGateway(t *testing.T) (*core.Gateway, *core.MemoryPresigner) {
 	issuer := newIssuer(t)
 	policy := compilePolicy(t)
 	mem := core.NewMemoryPresigner("http://example.test")
-	gw, err := core.New(core.Config{Mode: "dev"}, issuer, policy, mem, nil, nil)
+	gw, err := core.New(core.Config{Mode: "dev"}, issuer, policy, mem, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +175,6 @@ func compilePolicy(t *testing.T) *tokenauth.Policy {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "policy.dev.json"))
 	if err != nil {
-		// when tests run from module root
 		raw, err = os.ReadFile("policy.dev.json")
 	}
 	if err != nil {

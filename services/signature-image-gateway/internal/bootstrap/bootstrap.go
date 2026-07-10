@@ -9,7 +9,6 @@ import (
 
 	"github.com/maceip/tamayo/tokenauth"
 	"github.com/maceip/tamayo/tokenprofile"
-	"github.com/maceip/tamayo/tokenservice"
 
 	"github.com/maceip/SigBird/services/signature-image-gateway/internal/core"
 )
@@ -72,14 +71,13 @@ func Build(opts Options) (*Result, error) {
 
 	gw, err := core.New(
 		core.Config{
-			Mode:                  opts.Mode,
-			PublicBase:            opts.PublicBase,
-			OriginChallengePrefix: opts.ChallengePrefix,
+			Mode:       opts.Mode,
+			PublicBase: opts.PublicBase,
+			Origin:     opts.ChallengePrefix,
 		},
 		issuer,
 		policy,
 		presigner,
-		tokenservice.NewMemorySpentStore(),
 		tokenauth.NewMemoryBudgetStore(),
 	)
 	if err != nil {

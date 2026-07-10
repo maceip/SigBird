@@ -22,10 +22,13 @@ identity/composition screens.
 1. Accept PNG / JPEG / GIF (first frame) / WebP input.
 2. Decode → aggressively re-encode as **lossy WebP**, shrinking dimensions and
    quality until the payload is **≤ 256 KiB** (or reject if impossible).
-3. Request an upload session from the gateway; complete it by presenting a
-   **tamayo burn token** bound to the upload challenge.
-4. `PUT` the WebP bytes to the returned S3 presigned URL.
-5. Store `https://<cdn-host>/<object-key>` in the signature HTML (not a data URI).
+3. Hold a **client holder key** (Ed25519 or PQ). Request an upload session;
+   obtain a **private-identity** token whose blinded issuer signature covers
+   that holder public key (**no email** in the token).
+4. Present with a holder proof-of-possession; the gateway learns only an
+   **origin-bound pseudonym**, then returns an S3 presigned PUT.
+5. `PUT` the WebP bytes; store `https://<cdn-host>/<object-key>` in the
+   signature HTML (not a data URI).
 
 ### Gateway (this service — product runtime)
 
@@ -65,12 +68,16 @@ App                     Gateway                         Tamayo packages / issuer
 - Object key: `sig/{yyyy}/{mm}/{sha256-prefix}/{object-id}.webp`
 - Public URL host allow-listed in the Android sanitizer
 
-#### Abuse gate (why tamayo)
+#### Abuse gate (why tamayo private-identity)
 
-- **Burn token**: one successful `/v1/uploads` spends the token (409 on replay).
-- **Budget**: tokenauth budget group (e.g. 16 burns / hour / eligibility bucket).
+- **Private-identity token**: blinded issuer signature over the **client holder
+  key**; presentation requires holder PoP. Verifier learns an **origin-bound
+  pseudonym only** — never an email address.
+- **Presentation nonce**: one successful `/v1/uploads` consumes the session
+  nonce (409 on replay).
+- **Budget**: tokenauth budget group for `private_identity`.
 - **Eligibility**: production should use mailbox / account-bound gates; DevX uses
-  `tee` + `software-witness` measurement allow-list (tamayo example policy).
+  `tee` + `software-witness` measurement allow-list.
 - **No anonymous free PUT**: S3 bucket blocks public write; only gateway-minted
   short-lived presigned URLs can write.
 

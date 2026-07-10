@@ -7,10 +7,10 @@
     "authorization_ttl_seconds": 120
   },
   "token_families": {
-    "burn": {
+    "private_identity": {
       "enabled": true,
       "allowed_gates": ["tee"],
-      "budget_group": "burn",
+      "budget_group": "private",
       "requires_attestation": true
     }
   },
@@ -22,11 +22,11 @@
   "measurements": [
     {
       "value_x": "dev-measurement",
-      "allow": ["burn"]
+      "allow": ["private_identity"]
     }
   ],
   "budgets": {
-    "burn": {
+    "private": {
       "limit": 32,
       "window_seconds": 3600
     }

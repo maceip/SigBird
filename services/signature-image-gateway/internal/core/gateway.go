@@ -4,14 +4,18 @@
 // runtime. Adapters in ../adapters map platform events onto [Request] /
 // [Response] and call [Gateway.Handle].
 //
-// Token mint/verify uses github.com/maceip/tamayo (burn tokens). S3 writes
-// go through a [Presigner] seam so local DevX can stub uploads.
+// Auth showcase: tamayo private-identity tokens — a blinded issuer signature
+// over the client's holder public key. No email address is ever learned;
+// the verifier only sees an origin-bound pseudonym after the holder proves
+// possession of the client key.
+//
+// S3 writes go through a [Presigner] seam so local DevX can stub uploads.
 package core
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -27,9 +31,11 @@ import (
 )
 
 const (
-	MaxUploadBytes     = 256 * 1024
+	MaxUploadBytes      = 256 * 1024
 	RequiredContentType = "image/webp"
 	SessionTTL          = 10 * time.Minute
+	DefaultMaxSkew      = 2 * time.Minute
+	DefaultOrigin       = "sigbird-signature-upload"
 )
 
 // Request is a platform-neutral HTTP-ish request.
@@ -68,9 +74,11 @@ type Config struct {
 	// PublicBase is the CDN/public origin used in returned public URLs when
 	// the Presigner does not override them (informational; Presigner wins).
 	PublicBase string
-	// OriginChallengePrefix is mixed into session challenges so burns are
-	// bound to this product ("sigbird-signature-upload").
-	OriginChallengePrefix string
+	// Origin is the relying-party origin for private-identity presentations
+	// (pseudonym is bound to this string; never an email).
+	Origin string
+	// MaxSkew is the allowed presentation timestamp skew.
+	MaxSkew time.Duration
 }
 
 // Gateway is the reference product runtime for signature-image uploads.
@@ -80,19 +88,20 @@ type Gateway struct {
 	svc       *tokenservice.Issuer
 	policy    *tokenauth.Policy
 	budgets   tokenauth.BudgetStore
-	spent     tokenservice.SpentStore
 	presigner Presigner
 	clock     Clock
 
 	mu       sync.Mutex
 	sessions map[string]*session
+	seenPvt  map[string]bool // origin\x00nonce replay set
 }
 
 type session struct {
-	ID        string
-	Challenge []byte
-	Created   time.Time
-	Expires   time.Time
+	ID                 string
+	Origin             string
+	PresentationNonce  [32]byte
+	Created            time.Time
+	Expires            time.Time
 }
 
 // New builds a gateway around an already-loaded tamayo issuer + policy.
@@ -101,7 +110,6 @@ func New(
 	issuer *tokenprofile.Issuer,
 	policy *tokenauth.Policy,
 	presigner Presigner,
-	spent tokenservice.SpentStore,
 	budgets tokenauth.BudgetStore,
 ) (*Gateway, error) {
 	if issuer == nil {
@@ -116,11 +124,11 @@ func New(
 	if cfg.Mode == "" {
 		cfg.Mode = "dev"
 	}
-	if cfg.OriginChallengePrefix == "" {
-		cfg.OriginChallengePrefix = "sigbird-signature-upload"
+	if cfg.Origin == "" {
+		cfg.Origin = DefaultOrigin
 	}
-	if spent == nil {
-		spent = tokenservice.NewMemorySpentStore()
+	if cfg.MaxSkew == 0 {
+		cfg.MaxSkew = DefaultMaxSkew
 	}
 	if budgets == nil {
 		budgets = tokenauth.NewMemoryBudgetStore()
@@ -135,10 +143,10 @@ func New(
 		svc:       svc,
 		policy:    policy,
 		budgets:   budgets,
-		spent:     spent,
 		presigner: presigner,
 		clock:     realClock{},
 		sessions:  make(map[string]*session),
+		seenPvt:   make(map[string]bool),
 	}, nil
 }
 
@@ -150,18 +158,21 @@ func (g *Gateway) Handle(ctx context.Context, req Request) Response {
 	}
 	switch {
 	case req.Method == "GET" && (path == "/healthz" || path == "/v1/healthz"):
-		return jsonOK(map[string]any{"ok": true, "mode": g.cfg.Mode})
+		return jsonOK(map[string]any{
+			"ok":           true,
+			"mode":         g.cfg.Mode,
+			"token_family": "private_identity",
+			"email":        nil,
+		})
 	case req.Method == "GET" && path == "/v1/issuer":
 		return g.handleIssuerInfo()
 	case req.Method == "POST" && path == "/v1/sessions":
-		return g.handleCreateSession(req)
+		return g.handleCreateSession()
 	case req.Method == "POST" && strings.HasPrefix(path, "/v1/sessions/") && strings.HasSuffix(path, "/assisted-mint"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/sessions/"), "/assisted-mint")
-		return g.handleAssistedMint(ctx, id, req)
+		return g.handleAssistedMint(id, req)
 	case req.Method == "POST" && path == "/v1/uploads":
 		return g.handleUpload(ctx, req)
-	case req.Method == "POST" && path == "/v1/tokens/verify":
-		return g.handleVerifyOnly(req)
 	default:
 		return jsonErr(404, "not found")
 	}
@@ -176,59 +187,81 @@ func (g *Gateway) handleIssuerInfo() Response {
 		"expanded_public_key_b64": b64(g.issuer.ExpandedPublicKey()),
 		"compact_public_key_b64":  b64(g.issuer.CompactPublicKey()),
 		"mode":                    g.cfg.Mode,
+		"token_family":            "private_identity",
+		"origin":                  g.cfg.Origin,
+		"email":                   nil,
 	})
 }
 
 type createSessionResponse struct {
-	SessionID      string `json:"session_id"`
-	ChallengeB64   string `json:"challenge_b64"`
-	ExpiresAtUnix  int64  `json:"expires_at_unix"`
-	MaxUploadBytes int    `json:"max_upload_bytes"`
-	ContentType    string `json:"content_type"`
-	AssistedMint   bool   `json:"assisted_mint_available"`
+	SessionID            string `json:"session_id"`
+	Origin               string `json:"origin"`
+	PresentationNonceB64 string `json:"presentation_nonce_b64"`
+	ExpiresAtUnix        int64  `json:"expires_at_unix"`
+	MaxUploadBytes       int    `json:"max_upload_bytes"`
+	ContentType          string `json:"content_type"`
+	TokenFamily          string `json:"token_family"`
+	Email                any    `json:"email"`
+	AssistedMint         bool   `json:"assisted_mint_available"`
 }
 
-func (g *Gateway) handleCreateSession(_ Request) Response {
+func (g *Gateway) handleCreateSession() Response {
 	g.gcSessions()
-	var raw [32]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	var idBytes, nonce [32]byte
+	if _, err := rand.Read(idBytes[:]); err != nil {
 		return jsonErr(500, "entropy: "+err.Error())
 	}
-	challenge := []byte(fmt.Sprintf("%s:%s", g.cfg.OriginChallengePrefix, hex.EncodeToString(raw[:])))
-	id := hex.EncodeToString(raw[:16])
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return jsonErr(500, "entropy: "+err.Error())
+	}
+	id := hex.EncodeToString(idBytes[:16])
 	now := g.clock.Now()
 	sess := &session{
-		ID:        id,
-		Challenge: challenge,
-		Created:   now,
-		Expires:   now.Add(SessionTTL),
+		ID:                id,
+		Origin:            g.cfg.Origin,
+		PresentationNonce: nonce,
+		Created:           now,
+		Expires:           now.Add(SessionTTL),
 	}
 	g.mu.Lock()
 	g.sessions[id] = sess
 	g.mu.Unlock()
 	return jsonOK(createSessionResponse{
-		SessionID:      id,
-		ChallengeB64:   b64(challenge),
-		ExpiresAtUnix:  sess.Expires.Unix(),
-		MaxUploadBytes: MaxUploadBytes,
-		ContentType:    RequiredContentType,
-		AssistedMint:   g.cfg.Mode == "dev",
+		SessionID:            id,
+		Origin:               sess.Origin,
+		PresentationNonceB64: b64(nonce[:]),
+		ExpiresAtUnix:        sess.Expires.Unix(),
+		MaxUploadBytes:       MaxUploadBytes,
+		ContentType:          RequiredContentType,
+		TokenFamily:          "private_identity",
+		Email:                nil,
+		AssistedMint:         g.cfg.Mode == "dev",
 	})
 }
 
 type assistedMintRequest struct {
-	// Optional overrides for DevX; defaults match tamayo example-policy.
 	SubjectValueX string `json:"subject_value_x,omitempty"`
 	BucketID      string `json:"bucket_id,omitempty"`
+	// HolderPubB64: optional client-supplied Ed25519 public key (32 bytes).
+	// If omitted in DevX, the gateway generates a holder keypair and returns
+	// the seed so the smoke client can sign presentations.
+	HolderPubB64 string `json:"holder_pub_b64,omitempty"`
 }
 
 type assistedMintResponse struct {
-	TokenB64     string `json:"token_b64"`
-	ChallengeB64 string `json:"challenge_b64"`
-	Note         string `json:"note"`
+	TokenFamily          string `json:"token_family"`
+	Email                any    `json:"email"`
+	TokenB64             string `json:"token_b64"`
+	HolderAlg            string `json:"holder_alg"`
+	HolderPubB64         string `json:"holder_pub_b64"`
+	HolderSeedB64        string `json:"holder_seed_b64,omitempty"` // DevX only
+	Origin               string `json:"origin"`
+	PresentationNonceB64 string `json:"presentation_nonce_b64"`
+	PseudonymHex         string `json:"pseudonym_hex"`
+	Note                 string `json:"note"`
 }
 
-func (g *Gateway) handleAssistedMint(_ context.Context, sessionID string, req Request) Response {
+func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 	if g.cfg.Mode != "dev" {
 		return jsonErr(403, "assisted-mint is disabled outside GATEWAY_MODE=dev")
 	}
@@ -249,16 +282,38 @@ func (g *Gateway) handleAssistedMint(_ context.Context, sessionID string, req Re
 		body.BucketID = "runtime-1"
 	}
 
-	var nonce, additionalR [32]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return jsonErr(500, "entropy: "+err.Error())
+	var (
+		holderPub  ed25519.PublicKey
+		holderPriv ed25519.PrivateKey
+		holderSeed []byte
+		err        error
+	)
+	if body.HolderPubB64 != "" {
+		raw, err := decodeB64(body.HolderPubB64)
+		if err != nil || len(raw) != ed25519.PublicKeySize {
+			return jsonErr(400, "holder_pub_b64 must be 32 raw bytes (base64url)")
+		}
+		holderPub = ed25519.PublicKey(raw)
+		// Client keeps the private key; we cannot return a seed.
+	} else {
+		holderPub, holderPriv, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return jsonErr(500, "holder keygen: "+err.Error())
+		}
+		holderSeed = holderPriv.Seed()
 	}
+
+	var additionalR [32]byte
 	if _, err := rand.Read(additionalR[:]); err != nil {
 		return jsonErr(500, "entropy: "+err.Error())
 	}
-	challengeDigest := sha256.Sum256(sess.Challenge)
-	input := tokenprofile.BurnInput(nonce, challengeDigest, g.issuer.TokenKeyID())
-	target, state := tokenprofile.PrepareBlind(input, additionalR)
+	input := tokenprofile.NewPrivateIdentityInput(
+		g.issuer.KeyVersion(),
+		g.issuer.TokenKeyID(),
+		tokenprofile.HolderAlgEd25519,
+		holderPub,
+	)
+	target, state := tokenprofile.PrepareBlind(input.Bytes(), additionalR)
 
 	now := g.clock.Now()
 	decision := g.policy.AuthorizeMint(tokenauth.MintRequest{
@@ -271,9 +326,10 @@ func (g *Gateway) handleAssistedMint(_ context.Context, sessionID string, req Re
 			BucketID:  body.BucketID,
 			Assurance: tokenauth.AssuranceVerified,
 		}},
-		TokenFamily: tokenauth.TokenBurn,
+		TokenFamily: tokenauth.TokenPrivateIdentity,
 		Count:       1,
 		KeyVersion:  g.issuer.KeyVersion(),
+		Origin:      sess.Origin,
 		Binding:     bindingOf([][]byte{target}),
 	}, g.budgets, now)
 	if !decision.Allow {
@@ -281,7 +337,7 @@ func (g *Gateway) handleAssistedMint(_ context.Context, sessionID string, req Re
 	}
 	sigs, err := g.svc.SignAuthorizedBlind(tokenservice.BlindMintRequest{
 		Decision: decision,
-		Family:   tokenauth.TokenBurn,
+		Family:   tokenauth.TokenPrivateIdentity,
 		Blinded:  [][]byte{target},
 		Now:      now,
 	})
@@ -292,33 +348,46 @@ func (g *Gateway) handleAssistedMint(_ context.Context, sessionID string, req Re
 	if err != nil {
 		return jsonErr(500, "finalize: "+err.Error())
 	}
-	token := tokenprofile.BurnToken{
-		TokenType:       tokenprofile.BurnTokenType,
-		Nonce:           nonce,
-		ChallengeDigest: challengeDigest,
-		TokenKeyID:      g.issuer.TokenKeyID(),
-		Authenticator:   authenticator,
+	pvt := tokenprofile.PrivateIdentityToken{Input: input, Authenticator: authenticator}
+	pseudonym := pvt.PseudonymForOrigin(sess.Origin)
+
+	out := assistedMintResponse{
+		TokenFamily:          "private_identity",
+		Email:                nil,
+		TokenB64:             b64(pvt.Bytes()),
+		HolderAlg:            "ed25519",
+		HolderPubB64:         b64(holderPub),
+		Origin:               sess.Origin,
+		PresentationNonceB64: b64(sess.PresentationNonce[:]),
+		PseudonymHex:         hex.EncodeToString(pseudonym[:]),
+		Note: "Showcase: blinded PoMFRIT signature over the client holder key. " +
+			"No email is in the token. Present with a holder PoP to reveal only an origin-bound pseudonym. " +
+			"DevX may return holder_seed_b64; production clients generate and keep the key locally.",
 	}
-	return jsonOK(assistedMintResponse{
-		TokenB64:     b64(token.Bytes()),
-		ChallengeB64: b64(sess.Challenge),
-		Note:         "DevX only: server ran the PoMFRIT blind loop. Production clients must blind locally.",
-	})
+	if holderSeed != nil {
+		out.HolderSeedB64 = b64(holderSeed)
+	}
+	return jsonOK(out)
 }
 
 type uploadRequest struct {
-	SessionID      string `json:"session_id"`
-	TokenB64       string `json:"token_b64"`
-	ContentSHA256  string `json:"content_sha256_hex"`
-	ContentLength  int64  `json:"content_length"`
-	ContentType    string `json:"content_type"`
+	SessionID         string `json:"session_id"`
+	TokenB64          string `json:"token_b64"`
+	SignatureB64      string `json:"signature_b64"`
+	IssuedAt          int64  `json:"issued_at"`
+	ContentSHA256     string `json:"content_sha256_hex"`
+	ContentLength     int64  `json:"content_length"`
+	ContentType       string `json:"content_type"`
 }
 
 type uploadResponse struct {
-	UploadURL  string `json:"upload_url"`
-	PublicURL  string `json:"public_url"`
-	ObjectKey  string `json:"object_key"`
-	ExpiresInS int    `json:"expires_in_seconds"`
+	UploadURL    string `json:"upload_url"`
+	PublicURL    string `json:"public_url"`
+	ObjectKey    string `json:"object_key"`
+	ExpiresInS   int    `json:"expires_in_seconds"`
+	PseudonymHex string `json:"pseudonym_hex"`
+	TokenFamily  string `json:"token_family"`
+	Email        any    `json:"email"`
 }
 
 func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
@@ -346,23 +415,45 @@ func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
 	if !ok {
 		return jsonErr(404, "unknown or expired session")
 	}
-	tokenBytes, err := base64.RawURLEncoding.DecodeString(body.TokenB64)
+	tokenBytes, err := decodeB64(body.TokenB64)
 	if err != nil {
-		// also accept std encoding
-		tokenBytes, err = base64.StdEncoding.DecodeString(body.TokenB64)
-		if err != nil {
-			return jsonErr(400, "token_b64: "+err.Error())
-		}
+		return jsonErr(400, "token_b64: "+err.Error())
 	}
-	token, err := tokenprofile.ParseBurnToken(tokenBytes)
+	token, err := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
 	if err != nil {
 		return jsonErr(400, "token: "+err.Error())
 	}
-	if err := g.issuer.VerifyBurnToken(token, sha256.Sum256(sess.Challenge)); err != nil {
-		return jsonErr(401, "burn verify: "+err.Error())
+	sig, err := decodeB64(body.SignatureB64)
+	if err != nil {
+		return jsonErr(400, "signature_b64: "+err.Error())
 	}
-	if err := g.spent.CheckAndMark(g.issuer.KeyVersion(), token.Nonce); err != nil {
-		return jsonStatus(409, map[string]string{"error": "burn token already spent"})
+	if body.IssuedAt == 0 {
+		body.IssuedAt = g.clock.Now().Unix()
+	}
+
+	replayKey := sess.Origin + "\x00" + string(sess.PresentationNonce[:])
+	g.mu.Lock()
+	if g.seenPvt[replayKey] {
+		g.mu.Unlock()
+		return jsonStatus(409, map[string]string{"error": "presentation nonce already used for this origin"})
+	}
+	g.seenPvt[replayKey] = true
+	g.mu.Unlock()
+
+	pseudonym, err := g.issuer.VerifyPrivateIdentityPresentation(tokenprofile.PrivateIdentityPresentation{
+		Token:     token,
+		Origin:    sess.Origin,
+		Nonce:     sess.PresentationNonce,
+		IssuedAt:  body.IssuedAt,
+		Signature: sig,
+	}, g.clock.Now(), g.cfg.MaxSkew)
+	if err != nil {
+		// allow retry with a fresh session if verify failed after marking —
+		// unmark so a bad signature does not burn the nonce forever in DevX.
+		g.mu.Lock()
+		delete(g.seenPvt, replayKey)
+		g.mu.Unlock()
+		return jsonErr(401, "private-identity present: "+err.Error())
 	}
 
 	now := g.clock.Now().UTC()
@@ -373,44 +464,18 @@ func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
 	if err != nil {
 		return jsonErr(500, "presign: "+err.Error())
 	}
-	// One-shot session.
 	g.mu.Lock()
 	delete(g.sessions, body.SessionID)
 	g.mu.Unlock()
 	return jsonOK(uploadResponse{
-		UploadURL:  uploadURL,
-		PublicURL:  publicURL,
-		ObjectKey:  key,
-		ExpiresInS: int(ttl.Seconds()),
+		UploadURL:    uploadURL,
+		PublicURL:    publicURL,
+		ObjectKey:    key,
+		ExpiresInS:   int(ttl.Seconds()),
+		PseudonymHex: hex.EncodeToString(pseudonym[:]),
+		TokenFamily:  "private_identity",
+		Email:        nil,
 	})
-}
-
-type verifyRequest struct {
-	TokenB64     string `json:"token_b64"`
-	ChallengeB64 string `json:"challenge_b64"`
-}
-
-func (g *Gateway) handleVerifyOnly(req Request) Response {
-	var body verifyRequest
-	if err := json.Unmarshal(req.Body, &body); err != nil {
-		return jsonErr(400, "json: "+err.Error())
-	}
-	tokenBytes, err := decodeB64(body.TokenB64)
-	if err != nil {
-		return jsonErr(400, "token_b64: "+err.Error())
-	}
-	challenge, err := decodeB64(body.ChallengeB64)
-	if err != nil {
-		return jsonErr(400, "challenge_b64: "+err.Error())
-	}
-	token, err := tokenprofile.ParseBurnToken(tokenBytes)
-	if err != nil {
-		return jsonErr(400, "token: "+err.Error())
-	}
-	if err := g.issuer.VerifyBurnToken(token, sha256.Sum256(challenge)); err != nil {
-		return jsonErr(401, err.Error())
-	}
-	return jsonOK(map[string]any{"ok": true, "spent": false, "note": "verify-only; did not mark spent"})
 }
 
 func (g *Gateway) getSession(id string) (*session, bool) {

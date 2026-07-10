@@ -10,6 +10,7 @@ import net.thunderbird.feature.account.settings.R
 internal class CryptoSettingsBuilder(
     private val resources: StringsResourceManager,
 ) : CryptoSettingsContract.SettingsBuilder {
+    @Suppress("LongMethod")
     override fun build(
         state: CryptoSettingsContract.State,
         onEvent: (CryptoSettingsContract.Event) -> Unit,

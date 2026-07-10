@@ -12,7 +12,10 @@ object SignatureContent {
     private val htmlSanitizer = SignatureHtmlSanitizer()
 
     private val HTML_TAG_REGEX = Regex(
-        pattern = """(?i)^\s*(?:<!DOCTYPE\s+html\b|<html\b|<body\b|<div\b|<p\b|<span\b|<br\b|<img\b|<table\b|<b\b|<i\b|<u\b|<strong\b|<em\b|<a\b|<font\b)""",
+        pattern = """
+            (?i)^\s*(?:<!DOCTYPE\s+html\b|<html\b|<body\b|<div\b|<p\b|<span\b|<br\b|
+            <img\b|<table\b|<b\b|<i\b|<u\b|<strong\b|<em\b|<a\b|<font\b)
+        """.trimIndent().replace("\n", ""),
     )
 
     @JvmStatic
@@ -55,14 +58,11 @@ object SignatureContent {
      * Sanitizes an HTML signature for persistence. Plain text is returned unchanged.
      */
     @JvmStatic
-    fun sanitizeForStorage(signature: String?): String? {
-        if (signature == null) return null
-        if (signature.isBlank()) return signature
-        return if (isHtml(signature)) {
-            htmlSanitizer.sanitize(signature)
-        } else {
-            signature
-        }
+    fun sanitizeForStorage(signature: String?): String? = when {
+        signature == null -> null
+        signature.isBlank() -> signature
+        isHtml(signature) -> htmlSanitizer.sanitize(signature)
+        else -> signature
     }
 
     private fun wrapWithSignatureClass(html: String): String {

@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   validate-milestones:
+    if: github.repository_owner == 'thunderbird'
     runs-on: ubuntu-latest
     steps:
       - name: Ensure there are exactly 3 milestones open

@@ -10,7 +10,9 @@ import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomai
 internal class GetAccountCapabilities(
     private val capabilities: AccountSettingsCapabilities,
 ) : UseCase.GetAccountCapabilities {
-    override suspend fun invoke(accountId: AccountId): Outcome<AccountCapabilities, AccountSettingsDomainContract.AccountSettingError> {
+    override suspend fun invoke(
+        accountId: AccountId,
+    ): Outcome<AccountCapabilities, AccountSettingsDomainContract.AccountSettingError> {
         return Outcome.success(
             AccountCapabilities(
                 supportsFolderSubscriptions = capabilities.supportsFolderSubscriptions(accountId),

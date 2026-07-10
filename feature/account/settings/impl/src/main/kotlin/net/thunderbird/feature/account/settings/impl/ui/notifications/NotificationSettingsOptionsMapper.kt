@@ -22,15 +22,30 @@ internal class NotificationSettingsOptionsMapper(
 
     private fun notificationLightLabel(light: NotificationLight): String {
         return when (light) {
-            NotificationLight.Disabled -> resources.stringResource(R.string.account_settings_notification_light_disabled)
-            NotificationLight.AccountColor -> resources.stringResource(R.string.account_settings_notification_light_account_color)
-            NotificationLight.SystemDefaultColor -> resources.stringResource(R.string.account_settings_notification_light_system)
+            NotificationLight.Disabled -> resources.stringResource(
+                R.string.account_settings_notification_light_disabled,
+            )
+
+            NotificationLight.AccountColor -> resources.stringResource(
+                R.string.account_settings_notification_light_account_color,
+            )
+
+            NotificationLight.SystemDefaultColor -> resources.stringResource(
+                R.string.account_settings_notification_light_system,
+            )
+
             NotificationLight.White -> resources.stringResource(R.string.account_settings_notification_light_white)
+
             NotificationLight.Red -> resources.stringResource(R.string.account_settings_notification_light_red)
+
             NotificationLight.Green -> resources.stringResource(R.string.account_settings_notification_light_green)
+
             NotificationLight.Blue -> resources.stringResource(R.string.account_settings_notification_light_blue)
+
             NotificationLight.Yellow -> resources.stringResource(R.string.account_settings_notification_light_yellow)
+
             NotificationLight.Cyan -> resources.stringResource(R.string.account_settings_notification_light_cyan)
+
             NotificationLight.Magenta -> resources.stringResource(R.string.account_settings_notification_light_magenta)
         }
     }

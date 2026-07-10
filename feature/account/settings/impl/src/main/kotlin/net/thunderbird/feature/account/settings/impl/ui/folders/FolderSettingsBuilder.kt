@@ -10,6 +10,7 @@ import net.thunderbird.feature.account.settings.R
 internal class FolderSettingsBuilder(
     private val resources: StringsResourceManager,
 ) : FolderSettingsContract.SettingsBuilder {
+    @Suppress("LongMethod")
     override fun build(
         state: FolderSettingsContract.State,
         onEvent: (FolderSettingsContract.Event) -> Unit,

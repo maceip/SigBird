@@ -89,18 +89,27 @@ private fun handleSettingChange(
 ) {
     when (setting) {
         is SettingValue.Select -> when (setting.id) {
-            FolderSettingId.AUTO_EXPAND_FOLDER -> onEvent(FolderSettingsContract.Event.OnAutoExpandFolderChange(setting.value))
+            FolderSettingId.AUTO_EXPAND_FOLDER -> onEvent(
+                FolderSettingsContract.Event.OnAutoExpandFolderChange(setting.value),
+            )
+
             FolderSettingId.ARCHIVE_FOLDER -> onEvent(FolderSettingsContract.Event.OnArchiveFolderChange(setting.value))
+
             FolderSettingId.DRAFTS_FOLDER -> onEvent(FolderSettingsContract.Event.OnDraftsFolderChange(setting.value))
+
             FolderSettingId.SENT_FOLDER -> onEvent(FolderSettingsContract.Event.OnSentFolderChange(setting.value))
+
             FolderSettingId.SPAM_FOLDER -> onEvent(FolderSettingsContract.Event.OnSpamFolderChange(setting.value))
+
             FolderSettingId.TRASH_FOLDER -> onEvent(FolderSettingsContract.Event.OnTrashFolderChange(setting.value))
         }
+
         is SettingValue.Switch -> when (setting.id) {
             FolderSettingId.SUBSCRIBED_FOLDERS_ONLY -> onEvent(
                 FolderSettingsContract.Event.OnSubscribedFoldersOnlyToggle(setting.value),
             )
         }
+
         else -> Unit
     }
 }

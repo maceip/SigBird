@@ -7,11 +7,11 @@ import net.thunderbird.core.outcome.Outcome
 import net.thunderbird.core.validation.ValidationError
 import net.thunderbird.feature.account.AccountId
 import net.thunderbird.feature.account.avatar.Avatar
+import net.thunderbird.feature.account.profile.AccountProfile
 import net.thunderbird.feature.account.settings.api.RemoteFolderSettingsInfo
 import net.thunderbird.feature.mail.folder.api.SpecialFolderSelection
 import net.thunderbird.feature.notification.NotificationLight
 import net.thunderbird.feature.notification.NotificationVibration
-import net.thunderbird.feature.account.profile.AccountProfile
 
 internal interface AccountSettingsDomainContract {
 

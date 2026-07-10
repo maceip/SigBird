@@ -92,16 +92,20 @@ private fun handleSettingChange(
             CryptoSettingId.AUTOCRYPT_PREFER_ENCRYPT -> onEvent(
                 CryptoSettingsContract.Event.OnAutocryptPreferEncryptToggle(setting.value),
             )
+
             CryptoSettingId.HIDE_SIGN_ONLY -> onEvent(
                 CryptoSettingsContract.Event.OnHideSignOnlyToggle(setting.value),
             )
+
             CryptoSettingId.ENCRYPT_SUBJECT -> onEvent(
                 CryptoSettingsContract.Event.OnEncryptSubjectToggle(setting.value),
             )
+
             CryptoSettingId.ENCRYPT_ALL_DRAFTS -> onEvent(
                 CryptoSettingsContract.Event.OnEncryptAllDraftsToggle(setting.value),
             )
         }
+
         else -> Unit
     }
 }

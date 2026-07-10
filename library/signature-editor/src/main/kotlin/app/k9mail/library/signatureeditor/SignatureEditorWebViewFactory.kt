@@ -8,72 +8,76 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 
 internal object SignatureEditorWebViewFactory {
-  @SuppressLint("SetJavaScriptEnabled")
-  fun create(
-      context: android.content.Context,
-      initialHtml: String,
-      onHtmlChange: (String) -> Unit,
-      readOnly: Boolean = false,
-      fontSizeSp: Float? = null,
-  ): WebView {
-    return WebView(context).apply {
-      settings.javaScriptEnabled = true
-      settings.domStorageEnabled = false
-      settings.allowFileAccess = false
-      settings.allowContentAccess = false
-      settings.setSupportZoom(false)
-      settings.builtInZoomControls = false
-      settings.displayZoomControls = false
-      settings.blockNetworkLoads = true
-      settings.blockNetworkImage = true
-      settings.loadsImagesAutomatically = true
-      isVerticalScrollBarEnabled = true
-      webChromeClient = WebChromeClient()
-      webViewClient = object : WebViewClient() {
-        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-          return true
+    @SuppressLint("SetJavaScriptEnabled")
+    fun create(
+        context: android.content.Context,
+        initialHtml: String,
+        onHtmlChange: (String) -> Unit,
+        readOnly: Boolean = false,
+        fontSizeSp: Float? = null,
+    ): WebView {
+        return WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = false
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.setSupportZoom(false)
+            settings.builtInZoomControls = false
+            settings.displayZoomControls = false
+            settings.blockNetworkLoads = true
+            settings.blockNetworkImage = true
+            settings.loadsImagesAutomatically = true
+            isVerticalScrollBarEnabled = true
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    return true
+                }
+            }
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            if (!readOnly) {
+                addJavascriptInterface(
+                    SignatureEditorBridge { html ->
+                        val sanitized = SignatureStorage.sanitizeForStorage(html).orEmpty()
+                        mainHandler.post { onHtmlChange(sanitized) }
+                    },
+                    "AndroidSignatureEditor",
+                )
+            }
+            loadDataWithBaseURL(
+                null,
+                buildEditorDocument(initialHtml, readOnly = readOnly, fontSizeSp = fontSizeSp),
+                "text/html",
+                Charsets.UTF_8.name(),
+                null,
+            )
         }
-      }
-      val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-      if (!readOnly) {
-        addJavascriptInterface(
-            SignatureEditorBridge { html ->
-              val sanitized = SignatureStorage.sanitizeForStorage(html).orEmpty()
-              mainHandler.post { onHtmlChange(sanitized) }
-            },
-            "AndroidSignatureEditor",
-        )
-      }
-      loadDataWithBaseURL(
-          null,
-          buildEditorDocument(initialHtml, readOnly = readOnly, fontSizeSp = fontSizeSp),
-          "text/html",
-          Charsets.UTF_8.name(),
-          null,
-      )
-    }
-  }
-
-  fun buildEditorDocument(
-      signatureHtml: String,
-      readOnly: Boolean = false,
-      fontSizeSp: Float? = null,
-  ): String {
-    val bodyContent = when {
-      signatureHtml.isBlank() -> ""
-      SignatureStorage.isHtml(signatureHtml) ->
-          SignatureStorage.sanitizeForStorage(signatureHtml).orEmpty()
-      else -> signatureHtml
-          .replace("&", "&amp;")
-          .replace("<", "&lt;")
-          .replace(">", "&gt;")
-          .replace("\n", "<br>")
     }
 
-    val fontSizeCss = fontSizeSp?.let { "font-size: ${it}sp;" } ?: "font-size: 15px;"
-    val contentEditable = if (readOnly) "false" else "true"
+    @Suppress("LongMethod")
+    fun buildEditorDocument(
+        signatureHtml: String,
+        readOnly: Boolean = false,
+        fontSizeSp: Float? = null,
+    ): String {
+        val bodyContent = when {
+            signatureHtml.isBlank() -> ""
 
-    return """
+            SignatureStorage.isHtml(signatureHtml) ->
+                SignatureStorage.sanitizeForStorage(signatureHtml).orEmpty()
+
+            else ->
+                signatureHtml
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\n", "<br>")
+        }
+
+        val fontSizeCss = fontSizeSp?.let { "font-size: ${it}sp;" } ?: "font-size: 15px;"
+        val contentEditable = if (readOnly) "false" else "true"
+
+        return """
         <!DOCTYPE html>
         <html>
         <head>
@@ -135,31 +139,31 @@ internal object SignatureEditorWebViewFactory {
           </script>
         </body>
         </html>
-    """.trimIndent()
-  }
+        """.trimIndent()
+    }
 }
 
 private class SignatureEditorBridge(
     private val onHtmlChange: (String) -> Unit,
 ) {
-  @JavascriptInterface
-  fun onContentChanged(html: String) {
-    onHtmlChange(html)
-  }
+    @JavascriptInterface
+    fun onContentChanged(html: String) {
+        onHtmlChange(html)
+    }
 }
 
 internal fun String.toJsString(): String {
-  return buildString {
-    append('"')
-    for (ch in this@toJsString) {
-      when (ch) {
-        '\\' -> append("\\\\")
-        '"' -> append("\\\"")
-        '\n' -> append("\\n")
-        '\r' -> append("\\r")
-        else -> append(ch)
-      }
+    return buildString {
+        append('"')
+        for (ch in this@toJsString) {
+            when (ch) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                else -> append(ch)
+            }
+        }
+        append('"')
     }
-    append('"')
-  }
 }

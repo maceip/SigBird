@@ -10,11 +10,11 @@ import net.thunderbird.core.outcome.fold
 import net.thunderbird.core.outcome.handle
 import net.thunderbird.core.ui.contract.mvi.BaseViewModel
 import net.thunderbird.feature.account.AccountId
+import net.thunderbird.feature.account.settings.R
 import net.thunderbird.feature.account.settings.api.AccountSettingsCryptoBridge
 import net.thunderbird.feature.account.settings.api.OpenPgpProviderSummaryProvider
 import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomainContract
 import net.thunderbird.feature.account.settings.impl.domain.AccountSettingsDomainContract.UseCase
-import net.thunderbird.feature.account.settings.R
 
 private const val TAG = "CryptoSettingsViewModel"
 
@@ -39,27 +39,35 @@ internal class CryptoSettingsViewModel(
     override fun event(event: CryptoSettingsContract.Event) {
         when (event) {
             CryptoSettingsContract.Event.OnBackPressed -> emitEffect(CryptoSettingsContract.Effect.NavigateBack)
+
             CryptoSettingsContract.Event.OnOpenPgpProviderClick -> emitEffect(
                 CryptoSettingsContract.Effect.LaunchOpenPgpProviderChooser,
             )
+
             CryptoSettingsContract.Event.OnOpenPgpKeyClick -> emitEffect(
                 CryptoSettingsContract.Effect.LaunchOpenPgpKeySelector,
             )
+
             is CryptoSettingsContract.Event.OnAutocryptPreferEncryptToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateCryptoSettingsCommand.UpdateAutocryptPreferEncrypt(event.enabled),
             ) { updateState { it.copy(autocryptPreferEncrypt = event.enabled) } }
+
             is CryptoSettingsContract.Event.OnHideSignOnlyToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateCryptoSettingsCommand.UpdateHideSignOnly(event.enabled),
             ) { updateState { it.copy(hideSignOnly = event.enabled) } }
+
             is CryptoSettingsContract.Event.OnEncryptSubjectToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateCryptoSettingsCommand.UpdateEncryptSubject(event.enabled),
             ) { updateState { it.copy(encryptSubject = event.enabled) } }
+
             is CryptoSettingsContract.Event.OnEncryptAllDraftsToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateCryptoSettingsCommand.UpdateEncryptAllDrafts(event.enabled),
             ) { updateState { it.copy(encryptAllDrafts = event.enabled) } }
+
             CryptoSettingsContract.Event.OnAutocryptTransferClick -> emitEffect(
                 CryptoSettingsContract.Effect.LaunchAutocryptTransfer,
             )
+
             CryptoSettingsContract.Event.OnRefreshCryptoState -> refreshCryptoState()
         }
     }

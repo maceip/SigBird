@@ -33,7 +33,11 @@ internal class NotificationSettingsViewModel(
     private val ringtoneSummaryFormatter: RingtoneSummaryFormatter,
     private val vibrationSummaryFormatter: VibrationSummaryFormatter,
     private val logger: Logger,
-) : BaseViewModel<NotificationSettingsContract.State, NotificationSettingsContract.Event, NotificationSettingsContract.Effect>(
+) : BaseViewModel<
+    NotificationSettingsContract.State,
+    NotificationSettingsContract.Event,
+    NotificationSettingsContract.Effect,
+    >(
     NotificationSettingsContract.State(),
 ),
     NotificationSettingsContract.ViewModel {
@@ -45,25 +49,34 @@ internal class NotificationSettingsViewModel(
 
     override fun event(event: NotificationSettingsContract.Event) {
         when (event) {
-            NotificationSettingsContract.Event.OnBackPressed -> emitEffect(NotificationSettingsContract.Effect.NavigateBack)
+            NotificationSettingsContract.Event.OnBackPressed -> emitEffect(
+                NotificationSettingsContract.Effect.NavigateBack,
+            )
+
             is NotificationSettingsContract.Event.OnNotifyNewMailToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateNotifyNewMail(event.enabled),
             ) { updateState { it.copy(notifyNewMail = event.enabled) } }
+
             is NotificationSettingsContract.Event.OnNotifySelfToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateNotifySelf(event.enabled),
             ) { updateState { it.copy(notifySelf = event.enabled) } }
+
             is NotificationSettingsContract.Event.OnNotifyContactsOnlyToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateNotifyContactsOnly(event.enabled),
             ) { updateState { it.copy(notifyContactsOnly = event.enabled) } }
+
             is NotificationSettingsContract.Event.OnIgnoreChatMessagesToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateIgnoreChatMessages(event.enabled),
             ) { updateState { it.copy(ignoreChatMessages = event.enabled) } }
+
             is NotificationSettingsContract.Event.OnNotifySyncToggle -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateNotifySync(event.enabled),
             ) { updateState { it.copy(notifySync = event.enabled) } }
+
             NotificationSettingsContract.Event.OnRingtoneClick -> emitEffect(
                 NotificationSettingsContract.Effect.LaunchRingtonePicker(state.value.ringtone),
             )
+
             is NotificationSettingsContract.Event.OnRingtoneSelected -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateRingtone(event.ringtone),
             ) {
@@ -74,15 +87,18 @@ internal class NotificationSettingsViewModel(
                     )
                 }
             }
+
             is NotificationSettingsContract.Event.OnNotificationLightChange -> {
                 val light = NotificationLight.valueOf(event.option.id)
                 updateSetting(
                     AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateNotificationLight(light),
                 ) { updateState { it.copy(notificationLight = event.option) } }
             }
+
             NotificationSettingsContract.Event.OnVibrationClick -> emitEffect(
                 NotificationSettingsContract.Effect.ShowVibrationDialog,
             )
+
             is NotificationSettingsContract.Event.OnVibrationChange -> updateSetting(
                 AccountSettingsDomainContract.UpdateNotificationSettingsCommand.UpdateVibration(event.vibration),
             ) {
@@ -93,9 +109,11 @@ internal class NotificationSettingsViewModel(
                     )
                 }
             }
+
             NotificationSettingsContract.Event.OnMessagesChannelClick -> launchChannel(
                 AccountNotificationChannelType.MESSAGES,
             )
+
             NotificationSettingsContract.Event.OnMiscellaneousChannelClick -> launchChannel(
                 AccountNotificationChannelType.MISCELLANEOUS,
             )

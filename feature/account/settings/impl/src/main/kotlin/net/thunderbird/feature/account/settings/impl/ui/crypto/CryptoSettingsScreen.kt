@@ -37,12 +37,15 @@ internal fun CryptoSettingsScreen(
     val (state, dispatch) = viewModel.observe { effect ->
         when (effect) {
             CryptoSettingsContract.Effect.NavigateBack -> onBack()
+
             CryptoSettingsContract.Effect.LaunchOpenPgpProviderChooser -> {
                 cryptoBridge.launchOpenPgpProviderChooser(context, accountId)
             }
+
             CryptoSettingsContract.Effect.LaunchOpenPgpKeySelector -> {
                 cryptoBridge.launchOpenPgpKeySelector(context, accountId)
             }
+
             CryptoSettingsContract.Effect.LaunchAutocryptTransfer -> {
                 cryptoBridge.launchAutocryptTransfer(context, accountId)
             }

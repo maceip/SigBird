@@ -32,18 +32,31 @@ internal class HubSettingsViewModel(
     override fun event(event: HubSettingsContract.Event) {
         when (event) {
             HubSettingsContract.Event.OnBackPressed -> emitEffect(HubSettingsContract.Effect.NavigateBack)
+
             is HubSettingsContract.Event.OnAccountSelected -> {
                 if (event.account.id != accountId.value) {
                     emitEffect(HubSettingsContract.Effect.NavigateToAccount(event.account.id))
                 }
             }
+
             HubSettingsContract.Event.OnGeneralClick -> emitEffect(HubSettingsContract.Effect.NavigateToGeneral)
+
             HubSettingsContract.Event.OnReadingMailClick -> emitEffect(HubSettingsContract.Effect.NavigateToReadingMail)
-            HubSettingsContract.Event.OnFetchingMailClick -> emitEffect(HubSettingsContract.Effect.NavigateToFetchingMail)
+
+            HubSettingsContract.Event.OnFetchingMailClick -> emitEffect(
+                HubSettingsContract.Effect.NavigateToFetchingMail,
+            )
+
             HubSettingsContract.Event.OnCompositionClick -> emitEffect(HubSettingsContract.Effect.NavigateToComposition)
+
             HubSettingsContract.Event.OnFoldersClick -> emitEffect(HubSettingsContract.Effect.NavigateToFolders)
-            HubSettingsContract.Event.OnNotificationsClick -> emitEffect(HubSettingsContract.Effect.NavigateToNotifications)
+
+            HubSettingsContract.Event.OnNotificationsClick -> emitEffect(
+                HubSettingsContract.Effect.NavigateToNotifications,
+            )
+
             HubSettingsContract.Event.OnSearchClick -> emitEffect(HubSettingsContract.Effect.NavigateToSearch)
+
             HubSettingsContract.Event.OnCryptoClick -> emitEffect(HubSettingsContract.Effect.NavigateToCrypto)
         }
     }

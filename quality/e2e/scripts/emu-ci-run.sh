@@ -23,6 +23,8 @@ ACTIVITY="${2:-}"
 RUN_SECONDS="${3:-60}"
 BASE_URL="${EMU_BASE_URL:-https://emu.devkeys.net}"
 TOKEN="${EMU_API_TOKEN:-${EMU_TOKEN:-}}"
+# Some secret stores append a trailing '%'; strip it so Bearer auth works.
+TOKEN="${TOKEN%"%"}"
 OUT_DIR="${EMU_OUT_DIR:-artifacts/emu-run}"
 
 if [[ -z "$TOKEN" ]]; then

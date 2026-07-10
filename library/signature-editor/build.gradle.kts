@@ -17,6 +17,7 @@ dependencies {
     implementation(projects.library.htmlCleaner)
 
     testImplementation(libs.junit)
+    testImplementation(libs.assertk)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
 }

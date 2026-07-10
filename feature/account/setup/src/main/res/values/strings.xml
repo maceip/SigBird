@@ -44,6 +44,7 @@
     <string name="account_setup_options_your_name_error_required">Your name is required.</string>
     <string name="account_setup_options_email_signature_label">Email signature</string>
     <string name="account_setup_options_email_signature_error_blank">Email signature name can\'t be blank.</string>
+    <string name="account_setup_options_email_signature_error_invalid">Email signature contains unsupported or unsafe content.</string>
     <string name="account_setup_options_email_signature_rich_reminder">You can create a rich HTML signature later: open the menu → Settings → your account → Composition → Composition defaults or Manage identities.</string>
     <string name="account_setup_options_section_sync_options">Sync options</string>
     <string name="account_setup_options_account_check_frequency_label">Check frequency</string>

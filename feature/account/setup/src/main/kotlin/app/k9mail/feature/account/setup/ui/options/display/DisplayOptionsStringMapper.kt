@@ -8,6 +8,7 @@ import app.k9mail.feature.account.setup.domain.usecase.ValidateDisplayName.Valid
 import app.k9mail.feature.account.setup.domain.usecase.ValidateDisplayName.ValidateDisplayNameError.EmptyDisplayName
 import app.k9mail.feature.account.setup.domain.usecase.ValidateEmailSignature.ValidateEmailSignatureError
 import app.k9mail.feature.account.setup.domain.usecase.ValidateEmailSignature.ValidateEmailSignatureError.BlankEmailSignature
+import app.k9mail.feature.account.setup.domain.usecase.ValidateEmailSignature.ValidateEmailSignatureError.InvalidEmailSignature
 import net.thunderbird.core.validation.ValidationError
 
 internal fun ValidationError.toResourceString(resources: Resources): String {
@@ -34,5 +35,6 @@ private fun ValidateDisplayNameError.toDisplayNameErrorString(resources: Resourc
 private fun ValidateEmailSignatureError.toEmailSignatureErrorString(resources: Resources): String {
     return when (this) {
         is BlankEmailSignature -> resources.getString(R.string.account_setup_options_email_signature_error_blank)
+        is InvalidEmailSignature -> resources.getString(R.string.account_setup_options_email_signature_error_invalid)
     }
 }

@@ -24,9 +24,13 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FormatBold
+import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Report
@@ -140,6 +144,9 @@ object Icons {
         val Flower: ImageVector = OutlinedFlowerIcon
         val Folder: ImageVector = Icons.Outlined.Folder
         val FolderManaged: ImageVector = OutlinedFolderManagedIcon
+        val FormatBold: ImageVector = Icons.Outlined.FormatBold
+        val FormatItalic: ImageVector = Icons.Outlined.FormatItalic
+        val FormatUnderlined: ImageVector = Icons.Outlined.FormatUnderlined
 
         val Game: ImageVector = OutlinedGameIcon
         val Group: ImageVector = OutlinedGroupIcon
@@ -152,6 +159,7 @@ object Icons {
 
         val KeyboardArrowDown: ImageVector = Icons.Outlined.KeyboardArrowDown
 
+        val Link: ImageVector = Icons.Outlined.Link
         val Lock: ImageVector = OutlinedLockIcon
 
         val MarkEmailRead: ImageVector = OutlinedMarkEmailRead

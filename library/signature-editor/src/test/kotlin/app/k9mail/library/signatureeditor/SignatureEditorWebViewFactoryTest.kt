@@ -13,7 +13,7 @@ class SignatureEditorWebViewFactoryTest {
         assertThat(document).contains("emitDebounced")
         assertThat(document).contains("addEventListener('blur'")
         assertThat(document).contains("flush:")
-        assertThat(document).contains("max-height: 180px")
+        assertThat(document).contains("max-height: 320px")
     }
 
     @Test

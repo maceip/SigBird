@@ -107,7 +107,7 @@ internal object SignatureEditorWebViewFactory {
             }
             #editor img {
               max-width: 100%;
-              max-height: 180px;
+              max-height: 320px;
               height: auto;
               object-fit: contain;
             }

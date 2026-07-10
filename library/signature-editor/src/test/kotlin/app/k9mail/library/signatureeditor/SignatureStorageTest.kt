@@ -62,14 +62,14 @@ class SignatureStorageTest {
     }
 
     @Test
-    fun `prepareForEditing downscales large inline images`() {
-        // Tiny placeholder still returns sanitized HTML structure.
-        val html = """<div>Name<img src="data:image/png;base64,iVBORw0KGgo=" alt="x"></div>"""
+    fun `prepareForEditing sanitizes html and leaves plain text alone`() {
+        val html = """<div>Name<script>alert(1)</script></div>"""
 
         val prepared = SignatureStorage.prepareForEditing(html)
 
         assertThat(prepared).contains("Name")
         assertThat(prepared).doesNotContain("<script")
+        assertThat(SignatureStorage.prepareForEditing("Just text")).isEqualTo("Just text")
     }
 
     @Test

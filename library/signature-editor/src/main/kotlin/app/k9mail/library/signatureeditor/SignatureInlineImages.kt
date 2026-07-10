@@ -8,19 +8,24 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Encodes and downscales inline signature images so the WYSIWYG editor stays responsive.
+ * Encodes and optionally downscales inline signature images.
  *
- * Large data-URI images (often phone photos) previously caused multi-second freezes,
- * Binder transaction failures when editing identities, and unusable typing lag because
- * every keystroke re-serialized megabytes of base64 through the WebView bridge.
+ * Supports images up to [MAX_ENCODED_BYTES] (2 MiB). Extremely large source photos are
+ * resized so the editor stays responsive, but typical ~2 MB signature images are kept.
  */
 internal object SignatureInlineImages {
-    const val MAX_DIMENSION_PX = 480
-    const val MAX_ENCODED_BYTES = 120_000
-    const val MAX_SOURCE_BYTES = 8_000_000
-    const val JPEG_QUALITY = 72
-    private const val JPEG_RETRY_QUALITY = 57
-    private const val MAX_ABSOLUTE_ENCODED_BYTES = MAX_ENCODED_BYTES * 2
+    /** Maximum encoded image payload stored in a signature (2 MiB). */
+    const val MAX_ENCODED_BYTES = 2_000_000
+
+    /** Reject source files larger than this before attempting decode. */
+    const val MAX_SOURCE_BYTES = 12_000_000
+
+    /** Longest edge after optional downscale; keeps WebView layout reasonable. */
+    const val MAX_DIMENSION_PX = 2048
+
+    const val JPEG_QUALITY = 85
+    private const val JPEG_RETRY_QUALITY = 70
+    private const val MAX_ABSOLUTE_ENCODED_BYTES = MAX_ENCODED_BYTES
 
     private val DATA_URI_REGEX = Regex(
         pattern = """(?i)(data:image/(?:png|jpe?g);base64,)([A-Za-z0-9+/=]+)""",
@@ -48,10 +53,11 @@ internal object SignatureInlineImages {
     }
 
     /**
-     * Re-encodes oversized data-URI images already present in stored signature HTML.
+     * Re-encodes data-URI images that exceed the 2 MiB budget or max dimension.
+     * Images within budget are left unchanged.
      */
     fun optimizeHtml(html: String): String {
-        if (html.length < MAX_ENCODED_BYTES || !html.contains("data:image", ignoreCase = true)) {
+        if (!html.contains("data:image", ignoreCase = true)) {
             return html
         }
 
@@ -72,12 +78,17 @@ internal object SignatureInlineImages {
     }
 
     private fun exceedsMaxDimension(bytes: ByteArray): Boolean {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            return false
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                false
+            } else {
+                bounds.outWidth > MAX_DIMENSION_PX || bounds.outHeight > MAX_DIMENSION_PX
+            }
+        } catch (_: Exception) {
+            false
         }
-        return bounds.outWidth > MAX_DIMENSION_PX || bounds.outHeight > MAX_DIMENSION_PX
     }
 
     @Suppress("ReturnCount")
@@ -116,7 +127,6 @@ internal object SignatureInlineImages {
         }
 
         if (encoded.size > MAX_ABSOLUTE_ENCODED_BYTES) {
-            // Still enormous (e.g. complex PNG); drop rather than freeze the UI.
             return null
         }
 

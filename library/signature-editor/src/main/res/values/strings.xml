@@ -3,4 +3,9 @@
     <string name="signature_editor_label">Signature</string>
     <string name="signature_editor_link_label">Link URL</string>
     <string name="signature_editor_save">Save</string>
+    <string name="signature_editor_bold">Bold</string>
+    <string name="signature_editor_italic">Italic</string>
+    <string name="signature_editor_underline">Underline</string>
+    <string name="signature_editor_insert_link">Insert link</string>
+    <string name="signature_editor_insert_image">Insert image</string>
 </resources>

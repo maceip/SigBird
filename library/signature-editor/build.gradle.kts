@@ -15,11 +15,16 @@ android {
 
 dependencies {
     implementation(projects.library.htmlCleaner)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.coroutines.android)
+    // Ed25519 holder PoP for private-identity presentations (tamayo-compatible).
+    implementation("net.i2p.crypto:eddsa:0.3.0")
 
     testImplementation(libs.junit)
     testImplementation(libs.assertk)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.okhttp.mockwebserver)
 }
 
 codeCoverage {

@@ -16,6 +16,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +24,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.thunderbird.components.ui.bolt.atom.DividerHorizontal
 import net.thunderbird.components.ui.bolt.atom.Surface
 import net.thunderbird.components.ui.bolt.atom.text.TextBodySmall
@@ -32,8 +36,10 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 /**
  * WYSIWYG signature editor aligned with formatting that modern Outlook (Windows),
  * Gmail, and Apple Mail reliably render: text styles, colors, sizes, web-safe fonts,
- * lists, alignment, links, horizontal rules, and inline PNG/JPEG images (capped/scaled
- * to 2 MiB). Navigation and network loads are blocked inside the editor WebView.
+ * lists, alignment, links, horizontal rules, and inline PNG/JPEG/GIF images
+ * re-encoded as WebP ≤ 256 KiB and hosted at tokens.public.computer.
+ * Navigation is blocked; hosted signature images are fetched via an allow-listed
+ * intercept. Network loads are otherwise blocked inside the editor WebView.
  */
 @Suppress("LongMethod")
 @Composable
@@ -44,22 +50,29 @@ fun SignatureHtmlEditor(
     label: String = stringResource(R.string.signature_editor_label),
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var showLinkDialog by remember { mutableStateOf(false) }
     var showColorDialog by remember { mutableStateOf(false) }
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showFontFamilyDialog by remember { mutableStateOf(false) }
     var linkUrl by remember { mutableStateOf("https://") }
+    val imageHost = remember { SignatureImageHostClient() }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val dataUri = uri.toInlineImageDataUri(context) ?: return@rememberLauncherForActivityResult
-        webView?.evaluateJavascript(
-            "window.SignatureEditor.insertImage(${dataUri.toJsString()});",
-            null,
-        )
+        val target = webView
+        scope.launch {
+            val publicUrl = withContext(Dispatchers.IO) {
+                uri.toHostedSignatureImageUrl(context, imageHost)
+            } ?: return@launch
+            target?.evaluateJavascript(
+                "window.SignatureEditor.insertImage(${publicUrl.toJsString()});",
+                null,
+            )
+        }
     }
 
     fun runCommand(command: String, value: String? = null) {
@@ -104,7 +117,9 @@ fun SignatureHtmlEditor(
                     onFontSize = { showFontSizeDialog = true },
                     onFontFamily = { showFontFamilyDialog = true },
                     onInsertImage = {
-                        imagePicker.launch(arrayOf("image/png", "image/jpeg"))
+                        imagePicker.launch(
+                            arrayOf("image/png", "image/jpeg", "image/gif", "image/webp"),
+                        )
                     },
                 )
 
@@ -223,12 +238,22 @@ private fun createSignatureEditorWebView(
     }
 }
 
-private fun android.net.Uri.toInlineImageDataUri(context: android.content.Context): String? {
+/**
+ * Encodes the picked image to WebP ≤ 256 KiB and uploads it to the signature
+ * image gateway. Falls back to a data URI if the upload fails (offline / DevX).
+ */
+private fun android.net.Uri.toHostedSignatureImageUrl(
+    context: android.content.Context,
+    hostClient: SignatureImageHostClient,
+): String? {
     return try {
         context.contentResolver.openInputStream(this)?.use { input ->
             val bytes = input.readBytes()
             val mime = context.contentResolver.getType(this)
-            SignatureInlineImages.encodeBytes(bytes, mime)
+            val webp = SignatureInlineImages.encodeToWebp(bytes, mime) ?: return null
+            runCatching { hostClient.uploadWebp(webp) }.getOrElse {
+                SignatureInlineImages.encodeBytes(bytes, mime)
+            }
         }
     } catch (_: Exception) {
         null

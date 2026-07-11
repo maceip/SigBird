@@ -2,68 +2,76 @@ package app.k9mail.library.signatureeditor
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Encodes and downscales inline signature images.
+ * Encodes signature images as lossy WebP at or under [MAX_ENCODED_BYTES] (256 KiB).
  *
- * Caps payloads at [MAX_ENCODED_BYTES] (2 MiB). Larger phone photos are resized so the
- * editor and identity screens stay responsive — a multi‑megabyte data URI previously
- * froze Manage Identities and made Composition defaults unusable.
+ * Accepts PNG / JPEG / GIF (first frame) / WebP input. Aggressively reduces quality
+ * and dimensions until the budget is met (or returns null).
  */
 internal object SignatureInlineImages {
-    /** Maximum encoded image payload stored in a signature (2 MiB). */
-    const val MAX_ENCODED_BYTES = 2_000_000
+    /** Maximum encoded WebP payload (256 KiB) — matches the upload gateway. */
+    const val MAX_ENCODED_BYTES = 256 * 1024
 
     /** Reject source files larger than this before attempting decode. */
     const val MAX_SOURCE_BYTES = 12_000_000
 
-    /** Longest edge after downscale. */
+    /** Starting longest edge before the quality/dimension shrink loop. */
     const val MAX_DIMENSION_PX = 1600
 
-    const val JPEG_QUALITY = 82
-    private const val JPEG_RETRY_QUALITY = 68
-    private const val MAX_ABSOLUTE_ENCODED_BYTES = MAX_ENCODED_BYTES
+    private const val MIN_DIMENSION_PX = 64
+    private const val INITIAL_QUALITY = 82
+    private const val MIN_QUALITY = 40
 
     private val DATA_URI_REGEX = Regex(
-        pattern = """(?i)(data:image/(?:png|jpe?g);base64,)([A-Za-z0-9+/=]+)""",
+        pattern = """(?i)(data:image/(?:png|jpe?g|webp|gif);base64,)([A-Za-z0-9+/=]+)""",
     )
 
+    private val SUPPORTED_MIME = setOf(
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/gif",
+        "image/webp",
+    )
+
+    /**
+     * Encodes [bytes] to a WebP payload ≤ [MAX_ENCODED_BYTES].
+     * Returns null if empty, unsupported, undecodable, or impossible under budget.
+     */
     @Suppress("ReturnCount")
-    fun encodeBytes(bytes: ByteArray, mimeHint: String?): String? {
+    fun encodeToWebp(bytes: ByteArray, mimeHint: String?): ByteArray? {
         if (bytes.isEmpty() || bytes.size > MAX_SOURCE_BYTES) {
             return null
         }
-
         val normalizedMime = mimeHint?.lowercase()
-        val isExplicitlyUnsupported = normalizedMime != null &&
-            normalizedMime != "image/png" &&
-            normalizedMime != "image/jpeg" &&
-            normalizedMime != "image/jpg"
-        if (isExplicitlyUnsupported) {
+        if (normalizedMime != null && normalizedMime !in SUPPORTED_MIME) {
             return null
         }
-
-        val canKeepOriginal = bytes.size <= MAX_ENCODED_BYTES && !exceedsMaxDimension(bytes)
-        if (canKeepOriginal && normalizedMime != null) {
-            val mime = if (normalizedMime == "image/png") "image/png" else "image/jpeg"
-            return toDataUri(mime, bytes)
-        }
-
-        return compressBitmap(bytes)
+        return compressToWebpBudget(bytes)
     }
 
     /**
-     * Re-encodes data-URI images that exceed the 2 MiB budget or max dimension.
+     * Data-URI form of [encodeToWebp] for HTML that still embeds images locally
+     * (legacy signatures / offline). Prefer hosted URLs for new inserts.
+     */
+    fun encodeBytes(bytes: ByteArray, mimeHint: String?): String? {
+        val webp = encodeToWebp(bytes, mimeHint) ?: return null
+        return toDataUri("image/webp", webp)
+    }
+
+    /**
+     * Re-encodes oversized data-URI images in HTML to WebP under the 256 KiB budget.
      */
     fun optimizeHtml(html: String): String {
         if (!html.contains("data:image", ignoreCase = true)) {
             return html
         }
-
         return DATA_URI_REGEX.replace(html) { match ->
             val base64 = match.groupValues[2]
             val decoded = try {
@@ -71,13 +79,62 @@ internal object SignatureInlineImages {
             } catch (_: IllegalArgumentException) {
                 return@replace match.value
             }
-
-            if (decoded.size <= MAX_ENCODED_BYTES && !exceedsMaxDimension(decoded)) {
+            if (decoded.size <= MAX_ENCODED_BYTES &&
+                match.groupValues[1].contains("webp", ignoreCase = true) &&
+                !exceedsMaxDimension(decoded)
+            ) {
                 return@replace match.value
             }
-
-            compressBitmap(decoded) ?: match.value
+            encodeBytes(decoded, null) ?: match.value
         }
+    }
+
+    @Suppress("ReturnCount", "ComplexCondition")
+    private fun compressToWebpBudget(bytes: ByteArray): ByteArray? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return null
+        }
+
+        var maxDim = MAX_DIMENSION_PX
+        while (maxDim >= MIN_DIMENSION_PX) {
+            val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxDim)
+            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+                ?: return null
+            val scaled = scaleToMaxDimension(decoded, maxDim)
+            if (scaled !== decoded) {
+                decoded.recycle()
+            }
+
+            var quality = INITIAL_QUALITY
+            while (quality >= MIN_QUALITY) {
+                val encoded = encodeWebp(scaled, quality)
+                if (encoded != null && encoded.size <= MAX_ENCODED_BYTES) {
+                    scaled.recycle()
+                    return encoded
+                }
+                quality -= 8
+            }
+            scaled.recycle()
+            maxDim = (maxDim * 3) / 4
+        }
+        return null
+    }
+
+    private fun encodeWebp(bitmap: Bitmap, quality: Int): ByteArray? {
+        val output = ByteArrayOutputStream()
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            @Suppress("DEPRECATION")
+            Bitmap.CompressFormat.WEBP
+        }
+        if (!bitmap.compress(format, quality, output)) {
+            return null
+        }
+        return output.toByteArray()
     }
 
     private fun exceedsMaxDimension(bytes: ByteArray): Boolean {
@@ -92,61 +149,6 @@ internal object SignatureInlineImages {
         } catch (_: Exception) {
             false
         }
-    }
-
-    @Suppress("ReturnCount")
-    private fun compressBitmap(bytes: ByteArray): String? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            return null
-        }
-
-        val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, MAX_DIMENSION_PX)
-        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
-            ?: return null
-
-        val scaled = scaleToMaxDimension(decoded, MAX_DIMENSION_PX)
-        if (scaled !== decoded) {
-            decoded.recycle()
-        }
-
-        val output = ByteArrayOutputStream()
-        val hasAlpha = scaled.hasAlpha()
-        val compressed = if (hasAlpha) {
-            scaled.compress(Bitmap.CompressFormat.PNG, 100, output)
-        } else {
-            scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)
-        }
-        scaled.recycle()
-        if (!compressed) {
-            return null
-        }
-
-        var encoded = output.toByteArray()
-        if (!hasAlpha && encoded.size > MAX_ENCODED_BYTES) {
-            encoded = recompressSmaller(encoded, output) ?: return null
-        }
-
-        if (encoded.size > MAX_ABSOLUTE_ENCODED_BYTES) {
-            return null
-        }
-
-        val mime = if (hasAlpha) "image/png" else "image/jpeg"
-        return toDataUri(mime, encoded)
-    }
-
-    private fun recompressSmaller(encoded: ByteArray, output: ByteArrayOutputStream): ByteArray? {
-        output.reset()
-        val retry = BitmapFactory.decodeByteArray(encoded, 0, encoded.size) ?: return null
-        val smaller = scaleToMaxDimension(retry, MAX_DIMENSION_PX / 2)
-        if (smaller !== retry) {
-            retry.recycle()
-        }
-        smaller.compress(Bitmap.CompressFormat.JPEG, JPEG_RETRY_QUALITY, output)
-        smaller.recycle()
-        return output.toByteArray()
     }
 
     private fun scaleToMaxDimension(bitmap: Bitmap, maxDimension: Int): Bitmap {

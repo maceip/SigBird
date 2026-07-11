@@ -27,12 +27,13 @@ class SignatureHtmlSanitizerTest {
     }
 
     @Test
-    fun `allows cid and png jpeg data images`() {
+    fun `allows cid and png jpeg webp data images`() {
         val html = """
             <div>
               <img src="cid:logo@thunderbird" alt="Logo">
               <img src="data:image/png;base64,iVBORw0KGgo=" alt="PNG">
               <img src="data:image/jpeg;base64,/9j/4AAQ=" alt="JPEG">
+              <img src="data:image/webp;base64,UklGR=" alt="WebP">
             </div>
         """.trimIndent()
 
@@ -41,6 +42,24 @@ class SignatureHtmlSanitizerTest {
         assertThat(result).contains("""src="cid:logo@thunderbird"""")
         assertThat(result).contains("data:image/png;base64,")
         assertThat(result).contains("data:image/jpeg;base64,")
+        assertThat(result).contains("data:image/webp;base64,")
+    }
+
+    @Test
+    fun `allows hosted images from tokens public computer only`() {
+        val html = """
+            <div>
+              <img src="https://tokens.public.computer/sig/2026/07/abcd/obj.webp" alt="Hosted">
+              <img src="https://evil.example/track.webp" alt="Evil">
+              <img src="https://user@tokens.public.computer/x.webp" alt="Trick">
+            </div>
+        """.trimIndent()
+
+        val result = testSubject.sanitize(html)
+
+        assertThat(result).contains("https://tokens.public.computer/sig/2026/07/abcd/obj.webp")
+        assertThat(result).doesNotContain("evil.example")
+        assertThat(result).doesNotContain("user@")
     }
 
     @Test

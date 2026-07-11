@@ -12,6 +12,8 @@ import android.webkit.WebViewClient
 internal object SignatureEditorWebViewFactory {
     private const val CONTENT_CHANGE_DEBOUNCE_MS = 400L
 
+    private val hostedImageHttpClient: okhttp3.OkHttpClient by lazy { okhttp3.OkHttpClient() }
+
     @SuppressLint("SetJavaScriptEnabled")
     fun create(
         context: android.content.Context,
@@ -36,6 +38,30 @@ internal object SignatureEditorWebViewFactory {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     return true
+                }
+
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): android.webkit.WebResourceResponse? {
+                    val url = request?.url?.toString() ?: return null
+                    if (!SignatureImageHostClient.isAllowedHostedImageUrl(url)) {
+                        return null
+                    }
+                    return try {
+                        val response = hostedImageHttpClient.newCall(
+                            okhttp3.Request.Builder().url(url).get().build(),
+                        ).execute()
+                        val body = response.body ?: return null
+                        val mime = body.contentType()?.toString() ?: "image/webp"
+                        android.webkit.WebResourceResponse(
+                            mime.substringBefore(';'),
+                            null,
+                            body.byteStream(),
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
             }
             val mainHandler = Handler(Looper.getMainLooper())

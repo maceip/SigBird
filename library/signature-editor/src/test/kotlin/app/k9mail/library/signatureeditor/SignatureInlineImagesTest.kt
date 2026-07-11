@@ -21,28 +21,27 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class SignatureInlineImagesTest {
     @Test
-    fun `encodeBytes keeps images within two megabyte budget and max dimension`() {
+    fun `encodeBytes produces webp within 256 KiB budget`() {
         val jpeg = createNoisyJpeg(width = 800, height = 600)
-        assertThat(jpeg.size).isLessThanOrEqualTo(SignatureInlineImages.MAX_ENCODED_BYTES)
 
         val dataUri = SignatureInlineImages.encodeBytes(jpeg, "image/jpeg")
 
         assertThat(dataUri).isNotNull()
         val encoded = requireNotNull(dataUri)
-        assertThat(encoded).contains("data:image/jpeg;base64,")
+        assertThat(encoded).contains("data:image/webp;base64,")
         val decoded = Base64.decode(encoded.substringAfter("base64,"), Base64.DEFAULT)
-        assertThat(decoded.size).isEqualTo(jpeg.size)
+        assertThat(decoded.size).isLessThanOrEqualTo(SignatureInlineImages.MAX_ENCODED_BYTES)
+        assertThat(decoded.size).isLessThan(jpeg.size)
     }
 
     @Test
-    fun `encodeBytes downscales oversized dimensions under two megabyte budget`() {
+    fun `encodeToWebp downscales oversized dimensions under 256 KiB budget`() {
         val hugeJpeg = createNoisyJpeg(width = 4000, height = 3000)
 
-        val dataUri = SignatureInlineImages.encodeBytes(hugeJpeg, "image/jpeg")
+        val webp = SignatureInlineImages.encodeToWebp(hugeJpeg, "image/jpeg")
 
-        assertThat(dataUri).isNotNull()
-        val encoded = requireNotNull(dataUri)
-        val decoded = Base64.decode(encoded.substringAfter("base64,"), Base64.DEFAULT)
+        assertThat(webp).isNotNull()
+        val decoded = requireNotNull(webp)
         assertThat(decoded.size).isLessThanOrEqualTo(SignatureInlineImages.MAX_ENCODED_BYTES)
         assertThat(decoded.size).isLessThan(hugeJpeg.size)
 
@@ -55,11 +54,19 @@ class SignatureInlineImagesTest {
     @Test
     fun `encodeBytes rejects empty and unsupported mime`() {
         assertThat(SignatureInlineImages.encodeBytes(ByteArray(0), "image/jpeg")).isNull()
-        assertThat(SignatureInlineImages.encodeBytes(byteArrayOf(1, 2, 3), "image/gif")).isNull()
+        assertThat(SignatureInlineImages.encodeBytes(byteArrayOf(1, 2, 3), "image/svg+xml")).isNull()
     }
 
     @Test
-    fun `optimizeHtml rewrites images that exceed max dimension`() {
+    fun `encodeToWebp accepts gif mime hint`() {
+        val jpeg = createNoisyJpeg(width = 120, height = 80)
+        // BitmapFactory can decode JPEG bytes even with a gif hint when bytes are valid images;
+        // unsupported mime is rejected before decode — gif is now allowed.
+        assertThat(SignatureInlineImages.encodeToWebp(jpeg, "image/gif")).isNotNull()
+    }
+
+    @Test
+    fun `optimizeHtml rewrites jpeg data uris to webp under budget`() {
         val hugeJpeg = createNoisyJpeg(width = 4000, height = 3000)
         val hugeBase64 = Base64.encodeToString(hugeJpeg, Base64.NO_WRAP)
         val html = """<div>Hi<img src="data:image/jpeg;base64,$hugeBase64" alt="x"></div>"""
@@ -67,15 +74,17 @@ class SignatureInlineImagesTest {
         val optimized = SignatureInlineImages.optimizeHtml(html)
 
         assertThat(optimized.length).isLessThan(html.length)
-        assertThat(optimized).contains("data:image/")
+        assertThat(optimized).contains("data:image/webp;base64,")
         assertThat(optimized.contains("Hi")).isTrue()
     }
 
     @Test
-    fun `optimizeHtml leaves images within limits unchanged`() {
-        val jpeg = createNoisyJpeg(width = 800, height = 600)
-        val base64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
-        val html = """<div>Small<img src="data:image/jpeg;base64,$base64" alt="x"></div>"""
+    fun `optimizeHtml leaves small webp images unchanged`() {
+        val webp = requireNotNull(
+            SignatureInlineImages.encodeToWebp(createNoisyJpeg(width = 200, height = 150), "image/jpeg"),
+        )
+        val base64 = Base64.encodeToString(webp, Base64.NO_WRAP)
+        val html = """<div>Small<img src="data:image/webp;base64,$base64" alt="x"></div>"""
 
         assertThat(SignatureInlineImages.optimizeHtml(html)).isEqualTo(html)
     }

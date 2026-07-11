@@ -72,16 +72,11 @@ internal object SignatureEditorWebViewFactory {
             return null
         }
         return runCatching {
-            val response = hostedImageHttpClient.newCall(
+            hostedImageHttpClient.newCall(
                 okhttp3.Request.Builder().url(url).get().build(),
-            ).execute()
-            val body = response.body ?: return@runCatching null
-            val mime = body.contentType()?.toString() ?: "image/webp"
-            android.webkit.WebResourceResponse(
-                mime.substringBefore(';'),
-                null,
-                body.byteStream(),
             )
+                .execute()
+                .toHostedImageWebResourceResponse()
         }.getOrNull()
     }
 
@@ -207,6 +202,26 @@ internal object SignatureEditorWebViewFactory {
         </html>
         """.trimIndent()
     }
+}
+
+internal fun okhttp3.Response.toHostedImageWebResourceResponse(): android.webkit.WebResourceResponse? {
+    val responseBody = if (isSuccessful) {
+        body
+    } else {
+        close()
+        null
+    }
+    if (responseBody == null && isSuccessful) {
+        close()
+    }
+    val body = responseBody ?: return null
+
+    val mime = body.contentType()?.toString() ?: "image/webp"
+    return android.webkit.WebResourceResponse(
+        mime.substringBefore(';'),
+        null,
+        body.byteStream(),
+    )
 }
 
 private class SignatureEditorBridge(

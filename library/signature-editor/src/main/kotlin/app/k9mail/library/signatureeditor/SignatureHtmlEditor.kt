@@ -47,6 +47,7 @@ fun SignatureHtmlEditor(
     html: String,
     onHtmlChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    controller: SignatureHtmlEditorController? = null,
     label: String = stringResource(R.string.signature_editor_label),
 ) {
     val context = LocalContext.current
@@ -150,10 +151,12 @@ fun SignatureHtmlEditor(
                                 created.contentDescription = "signature_html_editor_webview"
                                 created.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 webView = created
+                                controller?.attachWebView(created)
                             }
                         },
                         update = { view ->
                             webView = view
+                            controller?.attachWebView(view)
                         },
                     )
                 }
@@ -218,11 +221,47 @@ fun SignatureHtmlEditor(
 
     DisposableEffect(Unit) {
         onDispose {
+            controller?.attachWebView(null)
             webView?.evaluateJavascript("window.SignatureEditor && window.SignatureEditor.flush();", null)
             webView?.destroy()
             webView = null
         }
     }
+}
+
+class SignatureHtmlEditorController {
+    private var webView: WebView? = null
+
+    fun captureHtml(currentHtml: String, onHtmlCaptured: (String) -> Unit) {
+        val currentWebView = webView
+        if (currentWebView == null) {
+            onHtmlCaptured(currentHtml)
+            return
+        }
+
+        currentWebView.evaluateJavascript(
+            "(window.SignatureEditor && window.SignatureEditor.getHtml()) || null",
+        ) { serializedHtml ->
+            onHtmlCaptured(serializedHtml.decodeEvaluateJavascriptString() ?: currentHtml)
+        }
+    }
+
+    internal fun attachWebView(webView: WebView?) {
+        this.webView = webView
+    }
+}
+
+@Composable
+fun rememberSignatureHtmlEditorController(): SignatureHtmlEditorController {
+    return remember { SignatureHtmlEditorController() }
+}
+
+internal fun String?.decodeEvaluateJavascriptString(): String? {
+    if (this == null || this == "null") return null
+
+    return runCatching {
+        org.json.JSONTokener(this).nextValue() as? String
+    }.getOrNull()
 }
 
 @SuppressLint("SetJavaScriptEnabled")

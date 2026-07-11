@@ -1,6 +1,7 @@
 package com.fsck.k9.activity
 
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.ViewModel
+import app.k9mail.library.signatureeditor.rememberSignatureHtmlEditorController
 import com.fsck.k9.EmailAddressValidator
 import com.fsck.k9.Preferences
 import com.fsck.k9.message.html.SignatureContent
@@ -49,6 +52,7 @@ import org.koin.android.ext.android.inject
 class EditIdentity : BaseActivity() {
     private val emailAddressValidator: EmailAddressValidator by inject()
     private val themeProvider: FeatureThemeProvider by inject()
+    private val signatureViewModel: EditIdentitySignatureViewModel by viewModels()
 
     private lateinit var account: LegacyAccountDto
     private var identityIndex: Int = -1
@@ -66,11 +70,14 @@ class EditIdentity : BaseActivity() {
             identityIndex in account.identities.indices -> account.identities[identityIndex]
             else -> Identity()
         }
+        signatureViewModel.initialize(initialIdentity.signature.orEmpty())
 
         setContent {
             themeProvider.WithTheme {
                 EditIdentityScreen(
                     initialIdentity = initialIdentity,
+                    signature = signatureViewModel.signature,
+                    onSignatureChange = signatureViewModel::updateSignature,
                     emailAddressValidator = emailAddressValidator,
                     onBack = { finish() },
                     onSave = { identity ->
@@ -105,6 +112,8 @@ class EditIdentity : BaseActivity() {
 @Composable
 private fun EditIdentityScreen(
     initialIdentity: Identity,
+    signature: String,
+    onSignatureChange: (String) -> Unit,
     emailAddressValidator: EmailAddressValidator,
     onBack: () -> Unit,
     onSave: (Identity) -> Unit,
@@ -115,13 +124,36 @@ private fun EditIdentityScreen(
     var email by rememberSaveable { mutableStateOf(initialIdentity.email.orEmpty()) }
     var replyTo by rememberSaveable { mutableStateOf(initialIdentity.replyTo.orEmpty()) }
     var useSignature by rememberSaveable { mutableStateOf(initialIdentity.signatureUse) }
-    // Keep the raw stored signature in Compose state. Image downscale + sanitize happen
-    // once inside the WebView document builder — doing it here AND there froze the UI.
-    var signature by remember { mutableStateOf(initialIdentity.signature.orEmpty()) }
+    val signatureEditorController = rememberSignatureHtmlEditorController()
 
     val canSave = remember(email, replyTo) {
         emailAddressValidator.isValidAddressOnly(email.trim()) &&
             (replyTo.isBlank() || emailAddressValidator.isValidAddressOnly(replyTo.trim()))
+    }
+
+    fun updateUseSignature(enabled: Boolean) {
+        if (useSignature && !enabled) {
+            signatureEditorController.captureHtml(signature) { latestSignature ->
+                onSignatureChange(latestSignature)
+                useSignature = false
+            }
+        } else {
+            useSignature = enabled
+        }
+    }
+
+    fun saveIdentity(latestSignature: String) {
+        onSignatureChange(latestSignature)
+        onSave(
+            initialIdentity.copy(
+                description = description.takeUnless { it.isBlank() },
+                name = name.takeUnless { it.isBlank() },
+                email = email.trim(),
+                replyTo = replyTo.trim().takeUnless { it.isBlank() },
+                signatureUse = useSignature,
+                signature = SignatureContent.sanitizeForStorage(latestSignature),
+            ),
+        )
     }
 
     Scaffold(
@@ -139,16 +171,7 @@ private fun EditIdentityScreen(
                     ButtonText(
                         enabled = canSave,
                         onClick = {
-                            onSave(
-                                initialIdentity.copy(
-                                    description = description.takeUnless { it.isBlank() },
-                                    name = name.takeUnless { it.isBlank() },
-                                    email = email.trim(),
-                                    replyTo = replyTo.trim().takeUnless { it.isBlank() },
-                                    signatureUse = useSignature,
-                                    signature = SignatureContent.sanitizeForStorage(signature),
-                                ),
-                            )
+                            signatureEditorController.captureHtml(signature, ::saveIdentity)
                         },
                         text = stringResource(R.string.edit_identity_save),
                         modifier = Modifier.testTag("edit_identity_save"),
@@ -196,13 +219,13 @@ private fun EditIdentityScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_identity_use_signature_row")
-                        .clickable { useSignature = !useSignature }
+                        .clickable { updateUseSignature(!useSignature) }
                         .padding(horizontal = BoltTheme.spacings.double),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(
                         checked = useSignature,
-                        onCheckedChange = { useSignature = it },
+                        onCheckedChange = { updateUseSignature(it) },
                         modifier = Modifier.testTag("edit_identity_use_signature"),
                     )
                     TextBodySmall(
@@ -213,11 +236,30 @@ private fun EditIdentityScreen(
                 if (useSignature) {
                     SignatureHtmlEditor(
                         html = signature,
-                        onHtmlChange = { signature = it },
+                        onHtmlChange = onSignatureChange,
+                        controller = signatureEditorController,
                         modifier = Modifier.testTag("edit_identity_signature_editor"),
                     )
                 }
             }
         }
+    }
+}
+
+internal class EditIdentitySignatureViewModel : ViewModel() {
+    var signature by mutableStateOf("")
+        private set
+
+    private var isInitialized = false
+
+    fun initialize(initialSignature: String) {
+        if (isInitialized) return
+
+        signature = initialSignature
+        isInitialized = true
+    }
+
+    fun updateSignature(signature: String) {
+        this.signature = signature
     }
 }

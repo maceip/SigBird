@@ -97,11 +97,11 @@ type Gateway struct {
 }
 
 type session struct {
-	ID                 string
-	Origin             string
-	PresentationNonce  [32]byte
-	Created            time.Time
-	Expires            time.Time
+	ID                string
+	Origin            string
+	PresentationNonce [32]byte
+	Created           time.Time
+	Expires           time.Time
 }
 
 // New builds a gateway around an already-loaded tamayo issuer + policy.
@@ -371,13 +371,13 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 }
 
 type uploadRequest struct {
-	SessionID         string `json:"session_id"`
-	TokenB64          string `json:"token_b64"`
-	SignatureB64      string `json:"signature_b64"`
-	IssuedAt          int64  `json:"issued_at"`
-	ContentSHA256     string `json:"content_sha256_hex"`
-	ContentLength     int64  `json:"content_length"`
-	ContentType       string `json:"content_type"`
+	SessionID     string `json:"session_id"`
+	TokenB64      string `json:"token_b64"`
+	SignatureB64  string `json:"signature_b64"`
+	IssuedAt      int64  `json:"issued_at"`
+	ContentSHA256 string `json:"content_sha256_hex"`
+	ContentLength int64  `json:"content_length"`
+	ContentType   string `json:"content_type"`
 }
 
 type uploadResponse struct {
@@ -462,6 +462,9 @@ func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
 	const ttl = 5 * time.Minute
 	uploadURL, publicURL, err := g.presigner.PresignPut(ctx, key, RequiredContentType, body.ContentLength, ttl)
 	if err != nil {
+		g.mu.Lock()
+		delete(g.seenPvt, replayKey)
+		g.mu.Unlock()
 		return jsonErr(500, "presign: "+err.Error())
 	}
 	g.mu.Lock()

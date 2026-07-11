@@ -40,7 +40,7 @@ interface AccountSetupCompositionContract {
         data class UseSignatureChange(val useSignature: Boolean) : Event
         data class SignatureChange(val signature: String) : Event
         data class SignatureLocationChange(val signatureLocation: Pair<Int, String>) : Event
-        data object SavePressed : Event
+        data class SavePressed(val signature: String? = null) : Event
         data object BackPressed: Event
     }
 

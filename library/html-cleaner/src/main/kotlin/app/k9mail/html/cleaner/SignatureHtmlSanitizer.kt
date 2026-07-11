@@ -88,15 +88,30 @@ class SignatureHtmlSanitizer {
     }
 
     private fun isAllowedHostedHttpsImage(lowerSrc: String): Boolean {
-        // Staging/production signature CDN only — never arbitrary https images.
-        val hasHostPrefix = lowerSrc.startsWith("https://$ALLOWED_IMAGE_HOST/")
-        val hasCredentialTricks = lowerSrc.contains("@") || lowerSrc.contains("\\")
-        return hasHostPrefix && !hasCredentialTricks
+        return isAllowedHostedImageUrl(lowerSrc)
     }
 
     companion object {
-        /** Hosted signature images (gateway / CDN). */
+        /**
+         * Hosted signature images only:
+         * - gateway / legacy DevX (`tokens.public.computer`)
+         * - CloudFront CDN for presigned public objects
+         */
+        val ALLOWED_IMAGE_HOSTS = setOf(
+            "tokens.public.computer",
+            "d2emmektbjgoev.cloudfront.net",
+        )
+
+        /** @deprecated Prefer [ALLOWED_IMAGE_HOSTS]; kept for older call sites. */
         const val ALLOWED_IMAGE_HOST = "tokens.public.computer"
+
+        fun isAllowedHostedImageUrl(src: String): Boolean {
+            val lower = src.trim().lowercase()
+            val hasHttps = lower.startsWith("https://")
+            val hasCredentialTricks = lower.contains("@") || lower.contains("\\")
+            val host = lower.removePrefix("https://").substringBefore('/')
+            return hasHttps && !hasCredentialTricks && host in ALLOWED_IMAGE_HOSTS
+        }
 
         private val ALLOWED_STYLE_PROPERTIES = setOf(
             "color",

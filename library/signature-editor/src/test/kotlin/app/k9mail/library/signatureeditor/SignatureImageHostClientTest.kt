@@ -29,10 +29,15 @@ class SignatureImageHostClientTest {
     }
 
     @Test
-    fun `isAllowedHostedImageUrl only accepts tokens public computer https paths`() {
+    fun `isAllowedHostedImageUrl only accepts gateway and cloudfront https paths`() {
         assertThat(
             SignatureImageHostClient.isAllowedHostedImageUrl(
                 "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp",
+            ),
+        ).isTrue()
+        assertThat(
+            SignatureImageHostClient.isAllowedHostedImageUrl(
+                "https://d2emmektbjgoev.cloudfront.net/sig/2026/07/abcd/obj.webp",
             ),
         ).isTrue()
         assertThat(

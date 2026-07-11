@@ -46,10 +46,11 @@ class SignatureHtmlSanitizerTest {
     }
 
     @Test
-    fun `allows hosted images from tokens public computer only`() {
+    fun `allows hosted images from tokens public computer and cloudfront only`() {
         val html = """
             <div>
               <img src="https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp" alt="Hosted">
+              <img src="https://d2emmektbjgoev.cloudfront.net/sig/2026/07/abcd/obj.webp" alt="CDN">
               <img src="https://evil.example/track.webp" alt="Evil">
               <img src="https://user@tokens.public.computer/x.webp" alt="Trick">
             </div>
@@ -59,6 +60,9 @@ class SignatureHtmlSanitizerTest {
 
         assertThat(result).contains(
             "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp",
+        )
+        assertThat(result).contains(
+            "https://d2emmektbjgoev.cloudfront.net/sig/2026/07/abcd/obj.webp",
         )
         assertThat(result).doesNotContain("evil.example")
         assertThat(result).doesNotContain("user@")

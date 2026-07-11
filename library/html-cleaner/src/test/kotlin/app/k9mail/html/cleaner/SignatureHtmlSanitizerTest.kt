@@ -27,12 +27,13 @@ class SignatureHtmlSanitizerTest {
     }
 
     @Test
-    fun `allows cid and png jpeg data images`() {
+    fun `allows cid and png jpeg webp data images`() {
         val html = """
             <div>
               <img src="cid:logo@thunderbird" alt="Logo">
               <img src="data:image/png;base64,iVBORw0KGgo=" alt="PNG">
               <img src="data:image/jpeg;base64,/9j/4AAQ=" alt="JPEG">
+              <img src="data:image/webp;base64,UklGR=" alt="WebP">
             </div>
         """.trimIndent()
 
@@ -41,6 +42,26 @@ class SignatureHtmlSanitizerTest {
         assertThat(result).contains("""src="cid:logo@thunderbird"""")
         assertThat(result).contains("data:image/png;base64,")
         assertThat(result).contains("data:image/jpeg;base64,")
+        assertThat(result).contains("data:image/webp;base64,")
+    }
+
+    @Test
+    fun `allows hosted images from tokens public computer only`() {
+        val html = """
+            <div>
+              <img src="https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp" alt="Hosted">
+              <img src="https://evil.example/track.webp" alt="Evil">
+              <img src="https://user@tokens.public.computer/x.webp" alt="Trick">
+            </div>
+        """.trimIndent()
+
+        val result = testSubject.sanitize(html)
+
+        assertThat(result).contains(
+            "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp",
+        )
+        assertThat(result).doesNotContain("evil.example")
+        assertThat(result).doesNotContain("user@")
     }
 
     @Test
@@ -91,5 +112,23 @@ class SignatureHtmlSanitizerTest {
     @Test
     fun `empty input returns empty fragment`() {
         assertThat(testSubject.sanitize("")).isEqualTo("")
+    }
+
+    @Test
+    fun `keeps lists colors fonts and strikethrough used by modern clients`() {
+        val html = """
+            <div style="font-family: Arial; font-size: 14px; color: #333333; text-align: left">
+              <ul><li><b>Bold</b> <s>strike</s></li></ul>
+              <hr>
+            </div>
+        """.trimIndent()
+
+        val result = testSubject.sanitize(html)
+
+        assertThat(result).contains("<ul>")
+        assertThat(result).contains("font-family: Arial")
+        assertThat(result).contains("color: #333333")
+        assertThat(result).contains("<s>")
+        assertThat(result).contains("<hr")
     }
 }

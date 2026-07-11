@@ -35,6 +35,17 @@ object SignatureStorage {
         else -> signature
     }
 
+    /**
+     * Downscales oversized inline images then sanitizes for the editor WebView.
+     * Call at most once when building the editor document — not on every Compose recompose.
+     */
+    @JvmStatic
+    fun prepareForEditing(signature: String?): String = when {
+        signature.isNullOrBlank() -> signature.orEmpty()
+        !isHtml(signature) -> signature
+        else -> htmlSanitizer.sanitize(SignatureInlineImages.optimizeHtml(signature))
+    }
+
     @JvmStatic
     fun toPlainText(signature: String?): String {
         if (signature.isNullOrBlank()) return ""

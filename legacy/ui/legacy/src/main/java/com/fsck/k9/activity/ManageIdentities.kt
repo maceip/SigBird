@@ -94,8 +94,8 @@ class ManageIdentities : BaseActivity() {
                     identities = account.identities.toImmutableList(),
                     identityFormatter = identityFormatter,
                     onBack = { finish() },
-                    onAdd = { launchEditIdentity(identityIndex = -1, identity = null) },
-                    onEdit = { index, identity -> launchEditIdentity(index, identity) },
+                    onAdd = { launchEditIdentity(identityIndex = -1) },
+                    onEdit = { index, _ -> launchEditIdentity(index) },
                     onMoveUp = { index -> moveIdentity(index, index - 1) },
                     onMoveDown = { index -> moveIdentity(index, index + 1) },
                     onMakeDefault = { index -> moveIdentity(index, 0) },
@@ -106,13 +106,13 @@ class ManageIdentities : BaseActivity() {
         }
     }
 
-    private fun launchEditIdentity(identityIndex: Int, identity: Identity?) {
+    private fun launchEditIdentity(identityIndex: Int) {
+        // Load the identity inside EditIdentity from account storage. Passing a full
+        // Identity parcel (HTML signatures can include large inline images) exceeds the
+        // Binder transaction limit and black-screens / crashes the edit screen.
         val intent = Intent(this, EditIdentity::class.java).apply {
             putExtra(EditIdentity.EXTRA_ACCOUNT, account.uuid)
-            if (identityIndex >= 0 && identity != null) {
-                putExtra(EditIdentity.EXTRA_IDENTITY, identity)
-                putExtra(EditIdentity.EXTRA_IDENTITY_INDEX, identityIndex)
-            }
+            putExtra(EditIdentity.EXTRA_IDENTITY_INDEX, identityIndex)
         }
         editIdentityLauncher.launch(intent)
     }

@@ -56,6 +56,10 @@ class SignatureEditorView @JvmOverloads constructor(
         changeListener?.onSignatureChanged()
     }
 
+    fun flushPendingChanges() {
+        webView?.evaluateJavascript("window.SignatureEditor && window.SignatureEditor.flush();", null)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun ensureWebView() {
         if (webView != null) return

@@ -62,12 +62,15 @@ class AccountSetupCompositionViewModel(
             }
 
             is Event.SignatureChange -> updateState { state ->
-                val sanitized = SignatureContent.sanitizeForStorage(event.signature)
-                account = account.copy(signature = sanitized)
-                state.copy(signature = account.signature ?: "")
+                // Keep the live editor HTML as-is while typing. Sanitizing (and especially
+                // re-parsing large inline images) on every keystroke made the screen unusable.
+                account = account.copy(signature = event.signature)
+                state.copy(signature = event.signature)
             }
 
             is Event.SavePressed -> {
+                val sanitized = SignatureContent.sanitizeForStorage(account.signature)
+                account = account.copy(signature = sanitized)
                 saveAccount()
                 emitEffect(Effect.DoneUpdatingAccount)
             }
@@ -85,7 +88,7 @@ class AccountSetupCompositionViewModel(
                 senderEmail = account.email,
                 bccEmail = account.alwaysBcc ?: "",
                 useSignature = account.signatureUse,
-                signature = account.signature ?: "",
+                signature = account.signature.orEmpty(),
                 signatureLocations = signatureLocations,
                 selectedSignatureLocations = if (account.isSignatureBeforeQuotedText) {
                     Pair(1, resources.stringResource(R.string.account_settings_signature__location_before_quoted_text))

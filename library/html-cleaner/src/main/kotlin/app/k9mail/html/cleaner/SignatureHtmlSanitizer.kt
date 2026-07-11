@@ -8,10 +8,13 @@ import org.jsoup.safety.Safelist
 /**
  * Sanitizes HTML email signatures for outbound use.
  *
- * The allow-list is intentionally narrow and aligned with formatting that modern
- * Outlook (Windows), Gmail, and Apple Mail reliably support in July 2026:
- * basic text formatting, links, and PNG/JPEG images. Scripts, stylesheets,
- * remote tracking pixels via unsupported schemes, and exotic markup are removed.
+ * The allow-list is intentionally aligned with formatting that modern
+ * Outlook (Windows), Gmail, and Apple Mail reliably support:
+ * text styles (bold/italic/underline/strike), web-safe fonts and sizes,
+ * text/background colors, lists, alignment, links, tables, horizontal rules,
+ * and PNG/JPEG/WebP images (data URIs or hosted on the signature image CDN).
+ * Scripts, stylesheets, remote tracking pixels via unsupported hosts/schemes,
+ * and exotic markup are removed.
  */
 class SignatureHtmlSanitizer {
     private val cleaner = Cleaner(createSafelist())
@@ -78,11 +81,23 @@ class SignatureHtmlSanitizer {
             lower.startsWith("data:image/png;base64,") -> true
             lower.startsWith("data:image/jpeg;base64,") -> true
             lower.startsWith("data:image/jpg;base64,") -> true
+            lower.startsWith("data:image/webp;base64,") -> true
+            isAllowedHostedHttpsImage(lower) -> true
             else -> false
         }
     }
 
+    private fun isAllowedHostedHttpsImage(lowerSrc: String): Boolean {
+        // Staging/production signature CDN only — never arbitrary https images.
+        val hasHostPrefix = lowerSrc.startsWith("https://$ALLOWED_IMAGE_HOST/")
+        val hasCredentialTricks = lowerSrc.contains("@") || lowerSrc.contains("\\")
+        return hasHostPrefix && !hasCredentialTricks
+    }
+
     companion object {
+        /** Hosted signature images (gateway / CDN). */
+        const val ALLOWED_IMAGE_HOST = "tokens.public.computer"
+
         private val ALLOWED_STYLE_PROPERTIES = setOf(
             "color",
             "background-color",
@@ -132,7 +147,7 @@ class SignatureHtmlSanitizer {
                 .addAttributes("p", "align")
                 .addAttributes(":all", "class", "style", "dir")
                 .addProtocols("a", "href", "http", "https", "mailto")
-                .addProtocols("img", "src", "cid", "data")
+                .addProtocols("img", "src", "cid", "data", "https")
         }
     }
 }

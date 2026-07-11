@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "mode": "development",
+  "defaults": {
+    "allow_software_witness": true,
+    "max_batch": 8,
+    "authorization_ttl_seconds": 120
+  },
+  "token_families": {
+    "private_identity": {
+      "enabled": true,
+      "allowed_gates": ["tee"],
+      "budget_group": "private",
+      "requires_attestation": true
+    }
+  },
+  "gates": {
+    "tee": {
+      "enabled": true
+    }
+  },
+  "measurements": [
+    {
+      "value_x": "dev-measurement",
+      "allow": ["private_identity"]
+    }
+  ],
+  "budgets": {
+    "private": {
+      "limit": 32,
+      "window_seconds": 3600
+    }
+  }
+}

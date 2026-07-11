@@ -6,6 +6,24 @@ android {
     namespace = "app.k9mail.library.signatureeditor"
     resourcePrefix = "signature_editor_"
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    defaultConfig {
+        // Gateway URL + RP challenge origin only — never issuer signing keys.
+        buildConfigField(
+            "String",
+            "SIGNATURE_GATEWAY_BASE",
+            "\"https://tokens.public.computer\"",
+        )
+        buildConfigField(
+            "String",
+            "SIGNATURE_CHALLENGE_PREFIX",
+            "\"sigbird-signature-upload\"",
+        )
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

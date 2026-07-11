@@ -57,7 +57,12 @@ fun SignatureHtmlEditor(
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showFontFamilyDialog by remember { mutableStateOf(false) }
     var linkUrl by remember { mutableStateOf("https://") }
-    val imageHost = remember { SignatureImageHostClient() }
+    val imageHost = remember {
+        SignatureImageHostClient(
+            baseUrl = BuildConfig.SIGNATURE_GATEWAY_BASE,
+            challengePrefix = BuildConfig.SIGNATURE_CHALLENGE_PREFIX,
+        )
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),

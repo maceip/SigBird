@@ -86,6 +86,20 @@ class SignatureStorageTest {
     }
 
     @Test
+    fun `sanitizeForStorage keeps tokens public computer dev-get image urls`() {
+        val hosted =
+            "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp"
+        val html = """<div>Sig<img src="$hosted" alt="logo"></div>"""
+
+        val saved = SignatureStorage.sanitizeForStorage(html).orEmpty()
+        val reopened = SignatureStorage.prepareForEditing(saved)
+
+        assertThat(saved).contains(hosted)
+        assertThat(reopened).contains(hosted)
+        assertThat(reopened).contains("""alt="logo"""")
+    }
+
+    @Test
     fun `toPlainText extracts text from html with inline image`() {
         val html = """<div><b>Jane</b><img src="data:image/png;base64,abc=" alt="x"></div>"""
 

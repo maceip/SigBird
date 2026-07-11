@@ -15,8 +15,8 @@ import kotlin.math.roundToInt
  * and dimensions until the budget is met (or returns null).
  */
 internal object SignatureInlineImages {
-    /** Maximum encoded WebP payload (256 KiB) — matches the upload gateway. */
-    const val MAX_ENCODED_BYTES = 256 * 1024
+    /** Maximum encoded WebP payload (262144 bytes) — matches the upload gateway. */
+    const val MAX_ENCODED_BYTES = 262_144
 
     /** Reject source files larger than this before attempting decode. */
     const val MAX_SOURCE_BYTES = 12_000_000

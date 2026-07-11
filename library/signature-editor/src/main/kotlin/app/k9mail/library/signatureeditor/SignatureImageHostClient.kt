@@ -18,10 +18,12 @@ import org.json.JSONObject
  * Uploads a WebP signature image to the tokens gateway using a tamayo
  * private-identity token (assisted-mint in staging).
  *
- * Live base: [DEFAULT_BASE_URL].
+ * Base URL and challenge origin come from [BuildConfig] — issuer keys stay
+ * on the gateway, never in the app.
  */
 class SignatureImageHostClient(
-    private val baseUrl: String = DEFAULT_BASE_URL,
+    private val baseUrl: String = BuildConfig.SIGNATURE_GATEWAY_BASE,
+    private val challengePrefix: String = BuildConfig.SIGNATURE_CHALLENGE_PREFIX,
     private val httpClient: OkHttpClient = defaultClient(),
 ) {
     /**
@@ -39,6 +41,9 @@ class SignatureImageHostClient(
         val sessionId = session.getString("session_id")
         val origin = session.getString("origin")
         val nonceB64 = session.getString("presentation_nonce_b64")
+        require(origin == challengePrefix) {
+            "unexpected session origin '$origin' (expected '$challengePrefix')"
+        }
 
         val mint = postJson("/v1/sessions/$sessionId/assisted-mint", JSONObject())
         val tokenB64 = mint.getString("token_b64")
@@ -96,7 +101,7 @@ class SignatureImageHostClient(
     }
 
     companion object {
-        const val DEFAULT_BASE_URL = "https://tokens.public.computer"
+        /** Fallback host string for allow-list checks outside BuildConfig. */
         const val ALLOWED_HOST = "tokens.public.computer"
         private const val WEBP_MIME = "image/webp"
         private const val JSON_MIME = "application/json"

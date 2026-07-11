@@ -101,8 +101,6 @@ class SignatureImageHostClient(
     }
 
     companion object {
-        /** Fallback host string for allow-list checks outside BuildConfig. */
-        const val ALLOWED_HOST = "tokens.public.computer"
         private const val WEBP_MIME = "image/webp"
         private const val JSON_MIME = "application/json"
         private const val POP_DOMAIN = "eat-pass/pvt-pop\u0000"
@@ -114,13 +112,8 @@ class SignatureImageHostClient(
         private const val WRITE_TIMEOUT_SECONDS = 60L
         private const val ED25519_SEED_BYTES = 32
 
-        fun isAllowedHostedImageUrl(src: String): Boolean {
-            val lower = src.trim().lowercase()
-            val hasHostPrefix = lower.startsWith("https://$ALLOWED_HOST/")
-            // Block credentials / userinfo tricks.
-            val hasCredentialTricks = lower.contains("@") || lower.contains("\\")
-            return hasHostPrefix && !hasCredentialTricks
-        }
+        fun isAllowedHostedImageUrl(src: String): Boolean =
+            app.k9mail.html.cleaner.SignatureHtmlSanitizer.isAllowedHostedImageUrl(src)
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)

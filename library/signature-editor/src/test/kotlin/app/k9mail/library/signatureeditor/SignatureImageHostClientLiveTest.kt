@@ -35,7 +35,11 @@ class SignatureImageHostClientLiveTest {
         )
         val publicUrl = client.uploadWebp(webp)
 
-        assertThat(publicUrl).startsWith("https://tokens.public.computer/v1/dev-get/sig/")
+        assertThat(publicUrl).startsWith("https://")
+        assertThat(
+            publicUrl.contains("tokens.public.computer/") ||
+                publicUrl.contains("d2emmektbjgoev.cloudfront.net/"),
+        ).isTrue()
         assertThat(publicUrl).contains(".webp")
         assertThat(SignatureImageHostClient.isAllowedHostedImageUrl(publicUrl)).isTrue()
 

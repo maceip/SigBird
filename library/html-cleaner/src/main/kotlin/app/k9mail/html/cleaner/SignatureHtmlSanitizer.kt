@@ -89,13 +89,9 @@ class SignatureHtmlSanitizer {
 
     private fun isAllowedHostedHttpsImage(lowerSrc: String): Boolean {
         // Staging/production signature CDN only — never arbitrary https images.
-        if (!lowerSrc.startsWith("https://$ALLOWED_IMAGE_HOST/")) {
-            return false
-        }
-        if (lowerSrc.contains("@") || lowerSrc.contains("\\")) {
-            return false
-        }
-        return true
+        val hasHostPrefix = lowerSrc.startsWith("https://$ALLOWED_IMAGE_HOST/")
+        val hasCredentialTricks = lowerSrc.contains("@") || lowerSrc.contains("\\")
+        return hasHostPrefix && !hasCredentialTricks
     }
 
     companion object {

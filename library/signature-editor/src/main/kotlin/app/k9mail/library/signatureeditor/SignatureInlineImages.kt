@@ -27,6 +27,9 @@ internal object SignatureInlineImages {
     private const val MIN_DIMENSION_PX = 64
     private const val INITIAL_QUALITY = 82
     private const val MIN_QUALITY = 40
+    private const val QUALITY_STEP = 8
+    private const val DIMENSION_SHRINK_NUMERATOR = 3
+    private const val DIMENSION_SHRINK_DENOMINATOR = 4
 
     private val DATA_URI_REGEX = Regex(
         pattern = """(?i)(data:image/(?:png|jpe?g|webp|gif);base64,)([A-Za-z0-9+/=]+)""",
@@ -115,10 +118,10 @@ internal object SignatureInlineImages {
                     scaled.recycle()
                     return encoded
                 }
-                quality -= 8
+                quality -= QUALITY_STEP
             }
             scaled.recycle()
-            maxDim = (maxDim * 3) / 4
+            maxDim = (maxDim * DIMENSION_SHRINK_NUMERATOR) / DIMENSION_SHRINK_DENOMINATOR
         }
         return null
     }

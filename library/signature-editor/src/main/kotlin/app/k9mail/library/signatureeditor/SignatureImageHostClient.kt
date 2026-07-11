@@ -47,7 +47,7 @@ class SignatureImageHostClient(
         val tokenBytes = b64Decode(tokenB64)
         val tokenDigest = sha256(tokenBytes)
         val nonce = b64Decode(nonceB64)
-        require(nonce.size == 32) { "presentation nonce must be 32 bytes" }
+        require(nonce.size == DIGEST_BYTES) { "presentation nonce must be $DIGEST_BYTES bytes" }
 
         val issuedAt = System.currentTimeMillis() / 1000L
         val message = privateIdentityPresentationMessage(origin, nonce, tokenDigest, issuedAt)
@@ -101,20 +101,26 @@ class SignatureImageHostClient(
         private const val WEBP_MIME = "image/webp"
         private const val JSON_MIME = "application/json"
         private const val POP_DOMAIN = "eat-pass/pvt-pop\u0000"
+        private const val DIGEST_BYTES = 32
+        private const val ORIGIN_LEN_BYTES = 4
+        private const val ISSUED_AT_BYTES = 8
+        private const val CONNECT_TIMEOUT_SECONDS = 30L
+        private const val READ_TIMEOUT_SECONDS = 60L
+        private const val WRITE_TIMEOUT_SECONDS = 60L
+        private const val ED25519_SEED_BYTES = 32
 
         fun isAllowedHostedImageUrl(src: String): Boolean {
             val lower = src.trim().lowercase()
-            if (!lower.startsWith("https://$ALLOWED_HOST/")) {
-                return false
-            }
+            val hasHostPrefix = lower.startsWith("https://$ALLOWED_HOST/")
             // Block credentials / userinfo tricks.
-            return !lower.contains("@") && !lower.contains("\\")
+            val hasCredentialTricks = lower.contains("@") || lower.contains("\\")
+            return hasHostPrefix && !hasCredentialTricks
         }
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
 
         /** Wire-compatible with tamayo tokenprofile.PrivateIdentityPresentationMessage. */
@@ -124,11 +130,12 @@ class SignatureImageHostClient(
             tokenDigest: ByteArray,
             issuedAt: Long,
         ): ByteArray {
-            require(nonce.size == 32)
-            require(tokenDigest.size == 32)
+            require(nonce.size == DIGEST_BYTES)
+            require(tokenDigest.size == DIGEST_BYTES)
             val originBytes = origin.toByteArray(Charsets.UTF_8)
             val buffer = ByteBuffer.allocate(
-                POP_DOMAIN.length + 4 + originBytes.size + 32 + 32 + 8,
+                POP_DOMAIN.length + ORIGIN_LEN_BYTES + originBytes.size +
+                    DIGEST_BYTES + DIGEST_BYTES + ISSUED_AT_BYTES,
             ).order(ByteOrder.BIG_ENDIAN)
             buffer.put(POP_DOMAIN.toByteArray(Charsets.ISO_8859_1))
             buffer.putInt(originBytes.size)
@@ -140,7 +147,7 @@ class SignatureImageHostClient(
         }
 
         private fun signEd25519(seed: ByteArray, message: ByteArray): ByteArray {
-            require(seed.size == 32) { "ed25519 seed must be 32 bytes" }
+            require(seed.size == ED25519_SEED_BYTES) { "ed25519 seed must be $ED25519_SEED_BYTES bytes" }
             val spec = EdDSANamedCurveTable.getByName("Ed25519")
                 ?: error("Ed25519 curve missing")
             val privateKey = EdDSAPrivateKey(EdDSAPrivateKeySpec(seed, spec))

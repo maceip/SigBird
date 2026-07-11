@@ -44,24 +44,7 @@ internal object SignatureEditorWebViewFactory {
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): android.webkit.WebResourceResponse? {
-                    val url = request?.url?.toString() ?: return null
-                    if (!SignatureImageHostClient.isAllowedHostedImageUrl(url)) {
-                        return null
-                    }
-                    return try {
-                        val response = hostedImageHttpClient.newCall(
-                            okhttp3.Request.Builder().url(url).get().build(),
-                        ).execute()
-                        val body = response.body ?: return null
-                        val mime = body.contentType()?.toString() ?: "image/webp"
-                        android.webkit.WebResourceResponse(
-                            mime.substringBefore(';'),
-                            null,
-                            body.byteStream(),
-                        )
-                    } catch (_: Exception) {
-                        null
-                    }
+                    return request?.url?.toString()?.let { fetchAllowlistedHostedImage(it) }
                 }
             }
             val mainHandler = Handler(Looper.getMainLooper())
@@ -82,6 +65,24 @@ internal object SignatureEditorWebViewFactory {
                 null,
             )
         }
+    }
+
+    private fun fetchAllowlistedHostedImage(url: String): android.webkit.WebResourceResponse? {
+        if (!SignatureImageHostClient.isAllowedHostedImageUrl(url)) {
+            return null
+        }
+        return runCatching {
+            val response = hostedImageHttpClient.newCall(
+                okhttp3.Request.Builder().url(url).get().build(),
+            ).execute()
+            val body = response.body ?: return@runCatching null
+            val mime = body.contentType()?.toString() ?: "image/webp"
+            android.webkit.WebResourceResponse(
+                mime.substringBefore(';'),
+                null,
+                body.byteStream(),
+            )
+        }.getOrNull()
     }
 
     @Suppress("LongMethod")

@@ -53,13 +53,13 @@ App                     Gateway                         Tamayo packages / issuer
 
 #### HTTP surface (v1)
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/healthz` | Liveness |
-| `POST` | `/v1/sessions` | Create upload session; returns `session_id`, `challenge_b64`, issuer info |
-| `POST` | `/v1/sessions/{id}/assisted-mint` | **DevX only**: server-side blind mint → burn token (software-witness). Not for production. |
-| `POST` | `/v1/uploads` | Present burn token + content SHA-256 + byte length; spend token; return S3 PUT URL + public URL |
-| `POST` | `/v1/tokens/verify` | Optional debug: verify burn without issuing upload (no S3) |
+| Method |               Path                |                                             Purpose                                             |
+|--------|-----------------------------------|-------------------------------------------------------------------------------------------------|
+| `GET`  | `/healthz`                        | Liveness                                                                                        |
+| `POST` | `/v1/sessions`                    | Create upload session; returns `session_id`, `challenge_b64`, issuer info                       |
+| `POST` | `/v1/sessions/{id}/assisted-mint` | **DevX only**: server-side blind mint → burn token (software-witness). Not for production.      |
+| `POST` | `/v1/uploads`                     | Present burn token + content SHA-256 + byte length; spend token; return S3 PUT URL + public URL |
+| `POST` | `/v1/tokens/verify`               | Optional debug: verify burn without issuing upload (no S3)                                      |
 
 #### Upload constraints (enforced at presign + documented for client)
 
@@ -90,10 +90,10 @@ App                     Gateway                         Tamayo packages / issuer
 
 ### DevX vs production mint
 
-| Mode | Who runs PoMFRIT blind loop | Notes |
-| --- | --- | --- |
-| **assisted-mint (DevX)** | Gateway | Surfaces that Android cannot yet run PoMFRIT client-side; good friction log for tamayo/Android |
-| **client blind mint (prod goal)** | App | App blinds locally, calls issuer `/v1/blind-sign` (or gateway proxy), finalizes token |
+|               Mode                | Who runs PoMFRIT blind loop |                                             Notes                                              |
+|-----------------------------------|-----------------------------|------------------------------------------------------------------------------------------------|
+| **assisted-mint (DevX)**          | Gateway                     | Surfaces that Android cannot yet run PoMFRIT client-side; good friction log for tamayo/Android |
+| **client blind mint (prod goal)** | App                         | App blinds locally, calls issuer `/v1/blind-sign` (or gateway proxy), finalizes token          |
 
 Assisted mint is explicitly labeled and disabled unless `GATEWAY_MODE=dev`.
 
@@ -135,3 +135,4 @@ Built to mirror tamayo’s own boundary:
 - **Product HTTP + storage + S3:** owned here, not upstreamed into tamayo.
 - **Portable core:** `Gateway.Handle` has no edge SDK types so the same binary
   logic can sit behind local HTTP, Lambda, or a future Workers adapter.
+

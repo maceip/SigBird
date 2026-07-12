@@ -56,10 +56,11 @@ after SOI, prefixed with the magic `VINTS-ARMOR\0`:
 |------|-------------|
 | `cerf-bust-blue-thumb-with-vints-armor.jpg` | Thumbnail that still opens as a normal JPEG |
 | `cerf-bust-blue-with-vints-armor.jpg` | Full-res twin with the same armor embedded |
-| `extract-vints-armor-from-jpeg.py` | Extract the armor back out |
+
+Extract the armored ASCII with stock macOS/Linux tools:
 
 ```bash
-python3 extract-vints-armor-from-jpeg.py cerf-bust-blue-thumb-with-vints-armor.jpg
+strings cerf-bust-blue-thumb-with-vints-armor.jpg | sed -n '/-----BEGIN VINTS-----/,/-----END VINTS-----/p'
 ```
 
-The images remain valid (Pillow opens/loads them); viewers ignore the COM payload.
+The images remain valid; viewers ignore the COM payload.

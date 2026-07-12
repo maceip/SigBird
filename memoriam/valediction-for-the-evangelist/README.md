@@ -45,3 +45,21 @@ Binary CBOR of that array: `payload-block-thumb.cbor` (and full-res twin).
 | `payload-block-*.cbor` | Binary CBOR of the payload block array |
 
 Decode a `.cbor` file with any CBOR tool; the 6th array element is the JPEG bytes.
+
+## JPEG with embedded VINTS armor
+
+The full armored memoriam text (`valediction-memoriam-vints-armor.txt`) is also
+embedded inside valid JPEGs via a JPEG **COM** comment segment (`0xFFFE`) right
+after SOI, prefixed with the magic `VINTS-ARMOR\0`:
+
+| File | Description |
+|------|-------------|
+| `cerf-bust-blue-thumb-with-vints-armor.jpg` | Thumbnail that still opens as a normal JPEG |
+| `cerf-bust-blue-with-vints-armor.jpg` | Full-res twin with the same armor embedded |
+| `extract-vints-armor-from-jpeg.py` | Extract the armor back out |
+
+```bash
+python3 extract-vints-armor-from-jpeg.py cerf-bust-blue-thumb-with-vints-armor.jpg
+```
+
+The images remain valid (Pillow opens/loads them); viewers ignore the COM payload.

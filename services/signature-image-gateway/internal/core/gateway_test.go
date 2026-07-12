@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -20,8 +21,48 @@ import (
 	"github.com/maceip/SigBird/services/signature-image-gateway/internal/core"
 )
 
+// holder is a client-side keypair: the private key never goes to the gateway.
+type holder struct {
+	pub  ed25519.PublicKey
+	priv ed25519.PrivateKey
+}
+
+func newHolder(t *testing.T) holder {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return holder{pub: pub, priv: priv}
+}
+
+func (h holder) pubB64() string {
+	return base64.RawURLEncoding.EncodeToString(h.pub)
+}
+
+func (h holder) present(t *testing.T, origin, nonceB64, tokenB64 string, issuedAt int64) string {
+	t.Helper()
+	tokenBytes, err := base64.RawURLEncoding.DecodeString(tokenB64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonceRaw, err := base64.RawURLEncoding.DecodeString(nonceB64)
+	if err != nil || len(nonceRaw) != 32 {
+		t.Fatalf("bad nonce: %v", err)
+	}
+	var nonce [32]byte
+	copy(nonce[:], nonceRaw)
+	msg := tokenprofile.PrivateIdentityPresentationMessage(origin, nonce, token.Digest(), issuedAt)
+	return base64.RawURLEncoding.EncodeToString(ed25519.Sign(h.priv, msg))
+}
+
 func TestPrivateIdentityUploadShowcase(t *testing.T) {
 	gw, mem := testGateway(t)
+	h := newHolder(t)
 
 	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
 	if sess["token_family"] != "private_identity" {
@@ -34,40 +75,31 @@ func TestPrivateIdentityUploadShowcase(t *testing.T) {
 	origin := sess["origin"].(string)
 	nonceB64 := sess["presentation_nonce_b64"].(string)
 
-	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": h.pubB64(),
+	})
 	if mint["email"] != nil {
 		t.Fatalf("mint email should be null")
 	}
 	if mint["pseudonym_hex"] == nil || mint["pseudonym_hex"] == "" {
 		t.Fatal("expected pseudonym_hex in mint response")
 	}
+	if _, leaked := mint["holder_seed_b64"]; leaked {
+		t.Fatal("mint must never return a holder seed")
+	}
+	if mint["holder_pub_b64"] != h.pubB64() {
+		t.Fatalf("mint must echo the client holder key, got %v", mint["holder_pub_b64"])
+	}
 	tokenB64 := mint["token_b64"].(string)
-	seedB64 := mint["holder_seed_b64"].(string)
-
-	seed, err := base64.RawURLEncoding.DecodeString(seedB64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	holderPriv := ed25519.NewKeyFromSeed(seed)
-	tokenBytes, _ := base64.RawURLEncoding.DecodeString(tokenB64)
-	token, err := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nonceRaw, _ := base64.RawURLEncoding.DecodeString(nonceB64)
-	var nonce [32]byte
-	copy(nonce[:], nonceRaw)
-	issuedAt := time.Now().Unix()
-	msg := tokenprofile.PrivateIdentityPresentationMessage(origin, nonce, token.Digest(), issuedAt)
-	sig := ed25519.Sign(holderPriv, msg)
 
 	payload := bytes.Repeat([]byte("w"), 2048)
 	sum := sha256.Sum256(payload)
+	issuedAt := time.Now().Unix()
 
 	up := postJSON(t, gw, "POST", "/v1/uploads", map[string]any{
 		"session_id":         sid,
 		"token_b64":          tokenB64,
-		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"signature_b64":      h.present(t, origin, nonceB64, tokenB64, issuedAt),
 		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     len(payload),
@@ -80,16 +112,16 @@ func TestPrivateIdentityUploadShowcase(t *testing.T) {
 		t.Fatal("upload must not expose email")
 	}
 	key := up["object_key"].(string)
-	if err := mem.Put(key, payload); err != nil {
+	if err := mem.Put(key, payload, "image/webp"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Replay same presentation nonce must 409.
+	// Replay same presentation nonce must be rejected.
 	sess2 := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
 	resp := raw(t, gw, "POST", "/v1/uploads", map[string]any{
 		"session_id":         sess2["session_id"],
 		"token_b64":          tokenB64,
-		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"signature_b64":      h.present(t, origin, nonceB64, tokenB64, issuedAt),
 		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     len(payload),
@@ -99,6 +131,24 @@ func TestPrivateIdentityUploadShowcase(t *testing.T) {
 	// so expect 401 (bad PoP) rather than 200.
 	if resp.Status == 200 {
 		t.Fatalf("expected reject, got 200 body=%s", resp.Body)
+	}
+}
+
+func TestAssistedMintRequiresClientHolderKey(t *testing.T) {
+	gw, _ := testGateway(t)
+	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
+	sid := sess["session_id"].(string)
+
+	resp := raw(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	if resp.Status != 400 {
+		t.Fatalf("status=%d want 400 body=%s", resp.Status, resp.Body)
+	}
+
+	resp = raw(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": base64.RawURLEncoding.EncodeToString([]byte("short")),
+	})
+	if resp.Status != 400 {
+		t.Fatalf("status=%d want 400 body=%s", resp.Status, resp.Body)
 	}
 }
 
@@ -115,7 +165,9 @@ func TestAssistedMintDisabledInProd(t *testing.T) {
 	if sess["assisted_mint_available"] != false {
 		t.Fatalf("assisted mint should be unavailable in prod")
 	}
-	resp := raw(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	resp := raw(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": newHolder(t).pubB64(),
+	})
 	if resp.Status != 403 {
 		t.Fatalf("status=%d want 403 body=%s", resp.Status, resp.Body)
 	}
@@ -123,24 +175,19 @@ func TestAssistedMintDisabledInProd(t *testing.T) {
 
 func TestRejectOversize(t *testing.T) {
 	gw, _ := testGateway(t)
+	h := newHolder(t)
 	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
 	sid := sess["session_id"].(string)
-	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
-	seed, _ := base64.RawURLEncoding.DecodeString(mint["holder_seed_b64"].(string))
-	holderPriv := ed25519.NewKeyFromSeed(seed)
-	tokenBytes, _ := base64.RawURLEncoding.DecodeString(mint["token_b64"].(string))
-	token, _ := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
-	nonceRaw, _ := base64.RawURLEncoding.DecodeString(sess["presentation_nonce_b64"].(string))
-	var nonce [32]byte
-	copy(nonce[:], nonceRaw)
+	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": h.pubB64(),
+	})
+	tokenB64 := mint["token_b64"].(string)
 	issuedAt := time.Now().Unix()
-	msg := tokenprofile.PrivateIdentityPresentationMessage(sess["origin"].(string), nonce, token.Digest(), issuedAt)
-	sig := ed25519.Sign(holderPriv, msg)
 	sum := sha256.Sum256([]byte("x"))
 	resp := raw(t, gw, "POST", "/v1/uploads", map[string]any{
 		"session_id":         sid,
-		"token_b64":          mint["token_b64"],
-		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"token_b64":          tokenB64,
+		"signature_b64":      h.present(t, sess["origin"].(string), sess["presentation_nonce_b64"].(string), tokenB64, issuedAt),
 		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     core.MaxUploadBytes + 1,
@@ -148,6 +195,66 @@ func TestRejectOversize(t *testing.T) {
 	})
 	if resp.Status != 400 {
 		t.Fatalf("status=%d want 400 body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestRejectMissingIssuedAt(t *testing.T) {
+	gw, _ := testGateway(t)
+	h := newHolder(t)
+	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
+	sid := sess["session_id"].(string)
+	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": h.pubB64(),
+	})
+	tokenB64 := mint["token_b64"].(string)
+	sum := sha256.Sum256([]byte("x"))
+	resp := raw(t, gw, "POST", "/v1/uploads", map[string]any{
+		"session_id":         sid,
+		"token_b64":          tokenB64,
+		"signature_b64":      h.present(t, sess["origin"].(string), sess["presentation_nonce_b64"].(string), tokenB64, time.Now().Unix()),
+		"content_sha256_hex": hex.EncodeToString(sum[:]),
+		"content_length":     16,
+		"content_type":       "image/webp",
+	})
+	if resp.Status != 400 {
+		t.Fatalf("status=%d want 400 body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestMemoryPresignerEnforcesGrant(t *testing.T) {
+	mem := core.NewMemoryPresigner("http://example.test")
+	payload := []byte("RIFFxxxxWEBPdata")
+	sum := sha256.Sum256(payload)
+	_, _, err := mem.PresignPut(context.Background(), core.PresignPutInput{
+		Key:           "sig/2026/07/aa/k.webp",
+		ContentType:   "image/webp",
+		ContentLength: int64(len(payload)),
+		ContentSHA256: sum,
+		TTL:           time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := mem.Put("sig/2026/07/aa/other.webp", payload, "image/webp"); err == nil {
+		t.Fatal("put without a grant must fail")
+	}
+	if err := mem.Put("sig/2026/07/aa/k.webp", payload, "text/html"); err == nil {
+		t.Fatal("content-type mismatch must fail")
+	}
+	if err := mem.Put("sig/2026/07/aa/k.webp", append(payload, 'x'), "image/webp"); err == nil {
+		t.Fatal("length mismatch must fail")
+	}
+	tampered := append([]byte(nil), payload...)
+	tampered[0] ^= 0xff
+	if err := mem.Put("sig/2026/07/aa/k.webp", tampered, "image/webp"); err == nil {
+		t.Fatal("checksum mismatch must fail")
+	}
+	if err := mem.Put("sig/2026/07/aa/k.webp", payload, "image/webp"); err != nil {
+		t.Fatalf("matching put must succeed: %v", err)
+	}
+	if err := mem.Put("sig/2026/07/aa/k.webp", payload, "image/webp"); err == nil {
+		t.Fatal("grant must be single-use")
 	}
 }
 
@@ -160,25 +267,20 @@ func TestUploadAllowsRetryAfterPresignFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	h := newHolder(t)
 
 	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
 	sid := sess["session_id"].(string)
-	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
-	seed, _ := base64.RawURLEncoding.DecodeString(mint["holder_seed_b64"].(string))
-	holderPriv := ed25519.NewKeyFromSeed(seed)
-	tokenBytes, _ := base64.RawURLEncoding.DecodeString(mint["token_b64"].(string))
-	token, _ := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
-	nonceRaw, _ := base64.RawURLEncoding.DecodeString(sess["presentation_nonce_b64"].(string))
-	var nonce [32]byte
-	copy(nonce[:], nonceRaw)
+	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": h.pubB64(),
+	})
+	tokenB64 := mint["token_b64"].(string)
 	issuedAt := time.Now().Unix()
-	msg := tokenprofile.PrivateIdentityPresentationMessage(sess["origin"].(string), nonce, token.Digest(), issuedAt)
-	sig := ed25519.Sign(holderPriv, msg)
 	sum := sha256.Sum256([]byte("retry"))
 	body := map[string]any{
 		"session_id":         sid,
-		"token_b64":          mint["token_b64"],
-		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"token_b64":          tokenB64,
+		"signature_b64":      h.present(t, sess["origin"].(string), sess["presentation_nonce_b64"].(string), tokenB64, issuedAt),
 		"issued_at":          issuedAt,
 		"content_sha256_hex": hex.EncodeToString(sum[:]),
 		"content_length":     len(sum),
@@ -270,10 +372,7 @@ type flakyPresigner struct {
 
 func (p *flakyPresigner) PresignPut(
 	ctx context.Context,
-	key string,
-	contentType string,
-	maxBytes int64,
-	ttl time.Duration,
+	in core.PresignPutInput,
 ) (uploadURL, publicURL string, err error) {
 	p.attempts++
 	if p.attempts == 1 {

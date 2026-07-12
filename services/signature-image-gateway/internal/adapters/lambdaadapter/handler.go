@@ -18,11 +18,11 @@ import (
 // event we need. Defined locally so the module does not require the AWS
 // Lambda SDK just to compile the portable core + local server.
 type APIGatewayV2Request struct {
-	RawPath                 string            `json:"rawPath"`
-	Body                    string            `json:"body"`
-	IsBase64Encoded         bool              `json:"isBase64Encoded"`
-	Headers                 map[string]string `json:"headers"`
-	RequestContext          struct {
+	RawPath         string            `json:"rawPath"`
+	Body            string            `json:"body"`
+	IsBase64Encoded bool              `json:"isBase64Encoded"`
+	Headers         map[string]string `json:"headers"`
+	RequestContext  struct {
 		HTTP struct {
 			Method string `json:"method"`
 		} `json:"http"`

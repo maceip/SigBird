@@ -29,7 +29,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), 400)
 				return
 			}
-			if err := h.Presigner.Put(key, body); err != nil {
+			if err := h.Presigner.Put(key, body, r.Header.Get("Content-Type")); err != nil {
 				http.Error(w, err.Error(), 400)
 				return
 			}

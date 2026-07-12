@@ -82,11 +82,25 @@ App                     Gateway                         Tamayo packages / issuer
   pseudonym only** — never an email address.
 - **Presentation nonce**: one successful `/v1/uploads` consumes the session
   nonce (409 on replay).
-- **Budget**: tokenauth budget group for `private_identity`.
-- **Eligibility**: production should use mailbox / account-bound gates; DevX uses
-  `tee` + `software-witness` measurement allow-list.
+- **Budget**: tokenauth budget group for `private_identity`, keyed by
+  `gate:bucket:group`. **The bucket is never client-named** — a client that
+  could pick its own `bucket_id` would mint a fresh budget per request.
+- **Sybil boundary (dev)**: the bucket is a salted hash of the request source
+  IP, so each source spends only its own mints-per-window budget — one greedy
+  client cannot starve other clients, and one client cannot fabricate new
+  budgets. Known limits: shared NATs share a budget; a botnet brings many
+  sources. That is acceptable for the DevX deployment because each mint is
+  still one bounded WebP within a per-source window.
+- **Sybil boundary (prod)**: the bucket must come from verified evidence the
+  client cannot mint for free — an attestation `bucket_claim` (device-bound),
+  or the `mailbox` gate's keyed HMAC bucket (account-bound; natural for a
+  mail client, and the issuer still never learns the address). One abusive
+  account exhausts only its own budget.
+- **Session caps**: the unauthenticated sessions table is bounded globally
+  (memory) and per source (fairness), so a session flood cannot lock out
+  other clients.
 - **No anonymous free PUT**: S3 bucket blocks public write; only gateway-minted
-  short-lived presigned URLs can write.
+  short-lived presigned URLs can write, pinned to one sha/len/type.
 
 ### S3 / CDN
 

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -131,6 +132,77 @@ func TestPrivateIdentityUploadShowcase(t *testing.T) {
 	// so expect 401 (bad PoP) rather than 200.
 	if resp.Status == 200 {
 		t.Fatalf("expected reject, got 200 body=%s", resp.Body)
+	}
+}
+
+func TestMintBudgetIsPerSource(t *testing.T) {
+	issuer := newIssuer(t)
+	policy := compilePolicyWithBudgetLimit(t, 2)
+	mem := core.NewMemoryPresigner("http://example.test")
+	gw, err := core.New(core.Config{Mode: "dev"}, issuer, policy, mem, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mintFrom := func(source string) core.Response {
+		sess := postJSONSrc(t, gw, "POST", "/v1/sessions", source, map[string]any{})
+		return rawSrc(t, gw, "POST", "/v1/sessions/"+sess["session_id"].(string)+"/assisted-mint", source, map[string]any{
+			"holder_pub_b64": newHolder(t).pubB64(),
+		})
+	}
+
+	// Source A gets its full budget…
+	for i := 0; i < 2; i++ {
+		if resp := mintFrom("198.51.100.7"); resp.Status != 200 {
+			t.Fatalf("mint %d from A: status=%d body=%s", i, resp.Status, resp.Body)
+		}
+	}
+	// …then is denied…
+	if resp := mintFrom("198.51.100.7"); resp.Status != 403 {
+		t.Fatalf("exhausted A: status=%d want 403 body=%s", resp.Status, resp.Body)
+	}
+	// …while source B is unaffected: no cross-client starvation.
+	if resp := mintFrom("203.0.113.9"); resp.Status != 200 {
+		t.Fatalf("mint from B after A exhausted: status=%d body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestSessionCapIsPerSource(t *testing.T) {
+	gw, _ := testGateway(t)
+	for i := 0; i < core.MaxOpenSessionsPerSource; i++ {
+		if resp := rawSrc(t, gw, "POST", "/v1/sessions", "198.51.100.7", map[string]any{}); resp.Status != 200 {
+			t.Fatalf("session %d: status=%d body=%s", i, resp.Status, resp.Body)
+		}
+	}
+	if resp := rawSrc(t, gw, "POST", "/v1/sessions", "198.51.100.7", map[string]any{}); resp.Status != 429 {
+		t.Fatalf("flooding source: status=%d want 429 body=%s", resp.Status, resp.Body)
+	}
+	if resp := rawSrc(t, gw, "POST", "/v1/sessions", "203.0.113.9", map[string]any{}); resp.Status != 200 {
+		t.Fatalf("other source blocked by flood: status=%d body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestAssistedMintIgnoresClientBucket(t *testing.T) {
+	issuer := newIssuer(t)
+	policy := compilePolicyWithBudgetLimit(t, 1)
+	mem := core.NewMemoryPresigner("http://example.test")
+	gw, err := core.New(core.Config{Mode: "dev"}, issuer, policy, mem, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A client naming its own bucket must not receive a fresh budget.
+	mintWithBucket := func(bucket string) core.Response {
+		sess := postJSONSrc(t, gw, "POST", "/v1/sessions", "198.51.100.7", map[string]any{})
+		return rawSrc(t, gw, "POST", "/v1/sessions/"+sess["session_id"].(string)+"/assisted-mint", "198.51.100.7", map[string]any{
+			"holder_pub_b64": newHolder(t).pubB64(),
+			"bucket_id":      bucket,
+		})
+	}
+	if resp := mintWithBucket("bucket-1"); resp.Status != 200 {
+		t.Fatalf("first mint: status=%d body=%s", resp.Status, resp.Body)
+	}
+	if resp := mintWithBucket("bucket-2"); resp.Status != 403 {
+		t.Fatalf("client-named bucket must not reset budget: status=%d body=%s", resp.Status, resp.Body)
 	}
 }
 
@@ -324,6 +396,24 @@ func newIssuer(t *testing.T) *tokenprofile.Issuer {
 	return issuer
 }
 
+func compilePolicyWithBudgetLimit(t *testing.T, limit int) *tokenauth.Policy {
+	t.Helper()
+	src := fmt.Sprintf(`{
+	  "version": 1,
+	  "mode": "development",
+	  "defaults": {"allow_software_witness": true, "max_batch": 8, "authorization_ttl_seconds": 120},
+	  "token_families": {"private_identity": {"enabled": true, "allowed_gates": ["tee"], "budget_group": "private", "requires_attestation": true}},
+	  "gates": {"tee": {"enabled": true}},
+	  "measurements": [{"value_x": "dev-measurement", "allow": ["private_identity"]}],
+	  "budgets": {"private": {"limit": %d, "window_seconds": 3600}}
+	}`, limit)
+	policy, err := tokenauth.CompileJSON([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
+}
+
 func compilePolicy(t *testing.T) *tokenauth.Policy {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "policy.dev.json"))
@@ -342,7 +432,12 @@ func compilePolicy(t *testing.T) *tokenauth.Policy {
 
 func postJSON(t *testing.T, gw *core.Gateway, method, path string, body any) map[string]any {
 	t.Helper()
-	resp := raw(t, gw, method, path, body)
+	return postJSONSrc(t, gw, method, path, "", body)
+}
+
+func postJSONSrc(t *testing.T, gw *core.Gateway, method, path, sourceIP string, body any) map[string]any {
+	t.Helper()
+	resp := rawSrc(t, gw, method, path, sourceIP, body)
 	if resp.Status != 200 {
 		t.Fatalf("%s %s status=%d body=%s", method, path, resp.Status, resp.Body)
 	}
@@ -355,14 +450,20 @@ func postJSON(t *testing.T, gw *core.Gateway, method, path string, body any) map
 
 func raw(t *testing.T, gw *core.Gateway, method, path string, body any) core.Response {
 	t.Helper()
+	return rawSrc(t, gw, method, path, "", body)
+}
+
+func rawSrc(t *testing.T, gw *core.Gateway, method, path, sourceIP string, body any) core.Response {
+	t.Helper()
 	b, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return gw.Handle(context.Background(), core.Request{
-		Method: method,
-		Path:   path,
-		Body:   b,
+		Method:   method,
+		Path:     path,
+		Body:     b,
+		SourceIP: sourceIP,
 	})
 }
 

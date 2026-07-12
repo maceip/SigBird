@@ -24,7 +24,8 @@ type APIGatewayV2Request struct {
 	Headers         map[string]string `json:"headers"`
 	RequestContext  struct {
 		HTTP struct {
-			Method string `json:"method"`
+			Method   string `json:"method"`
+			SourceIP string `json:"sourceIp"`
 		} `json:"http"`
 	} `json:"requestContext"`
 }
@@ -60,10 +61,11 @@ func (h Handler) Handle(ctx context.Context, event APIGatewayV2Request) (APIGate
 		path = "/"
 	}
 	resp := h.Gateway.Handle(ctx, core.Request{
-		Method:  event.RequestContext.HTTP.Method,
-		Path:    path,
-		Headers: headers,
-		Body:    body,
+		Method:   event.RequestContext.HTTP.Method,
+		Path:     path,
+		Headers:  headers,
+		Body:     body,
+		SourceIP: event.RequestContext.HTTP.SourceIP,
 	})
 	return APIGatewayV2Response{
 		StatusCode: resp.Status,

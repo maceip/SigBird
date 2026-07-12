@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -36,6 +37,24 @@ const (
 	SessionTTL          = 10 * time.Minute
 	DefaultMaxSkew      = 2 * time.Minute
 	DefaultOrigin       = "sigbird-signature-upload"
+
+	// MaxOpenSessions bounds the unauthenticated sessions map so a flood of
+	// POST /v1/sessions cannot grow memory without limit inside the TTL.
+	MaxOpenSessions = 4096
+	// MaxOpenSessionsPerSource keeps one flooding source from consuming the
+	// whole MaxOpenSessions table and starving other clients of sessions.
+	MaxOpenSessionsPerSource = 64
+
+	// devSubjectValueX is the fixed DevX mint subject. The budget bucket is
+	// server-owned on purpose: the tokenauth budget is keyed by
+	// gate:bucket:group, so a client that could name its own bucket would
+	// mint itself a fresh budget per request. In dev the bucket is derived
+	// from the request source (HMAC of the client IP), so each source gets
+	// its own mints-per-window budget — one greedy client exhausts only its
+	// own bucket. Production derives the bucket from verified evidence
+	// (attestation bucket_claim, or the mailbox HMAC bucket — natural for a
+	// mail client) that the client cannot fabricate.
+	devSubjectValueX = "dev-measurement"
 )
 
 // Request is a platform-neutral HTTP-ish request.
@@ -44,6 +63,10 @@ type Request struct {
 	Path    string
 	Headers map[string]string
 	Body    []byte
+	// SourceIP is the client address as reported by the edge adapter
+	// (Lambda source IP, or X-Forwarded-For / RemoteAddr for plain HTTP).
+	// Dev-mode budget buckets and session caps key off it.
+	SourceIP string
 }
 
 // Response is a platform-neutral HTTP-ish response.
@@ -102,6 +125,9 @@ type Gateway struct {
 	budgets   tokenauth.BudgetStore
 	presigner Presigner
 	clock     Clock
+	// srcSalt keys the source-IP hash so budget buckets and logs never
+	// carry raw client addresses. Process-local, like the memory stores.
+	srcSalt [32]byte
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -114,6 +140,7 @@ type Gateway struct {
 type session struct {
 	ID                string
 	Origin            string
+	SourceKey         string
 	PresentationNonce [32]byte
 	Created           time.Time
 	Expires           time.Time
@@ -152,6 +179,10 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+	var srcSalt [32]byte
+	if _, err := rand.Read(srcSalt[:]); err != nil {
+		return nil, fmt.Errorf("source salt: %w", err)
+	}
 	return &Gateway{
 		cfg:       cfg,
 		issuer:    issuer,
@@ -160,9 +191,22 @@ func New(
 		budgets:   budgets,
 		presigner: presigner,
 		clock:     realClock{},
+		srcSalt:   srcSalt,
 		sessions:  make(map[string]*session),
 		seenPvt:   make(map[string]time.Time),
 	}, nil
+}
+
+// sourceKey collapses a client address into a salted, non-reversible bucket
+// id. Unknown sources share one bucket rather than being rejected, so a
+// proxy that strips the address degrades to a shared budget, not an outage.
+func (g *Gateway) sourceKey(sourceIP string) string {
+	src := strings.TrimSpace(sourceIP)
+	if src == "" {
+		return "src-unknown"
+	}
+	sum := sha256.Sum256(append(g.srcSalt[:], src...))
+	return "src-" + hex.EncodeToString(sum[:8])
 }
 
 // Handle routes a portable request. Paths are matched without a host prefix.
@@ -182,7 +226,7 @@ func (g *Gateway) Handle(ctx context.Context, req Request) Response {
 	case req.Method == "GET" && path == "/v1/issuer":
 		return g.handleIssuerInfo()
 	case req.Method == "POST" && path == "/v1/sessions":
-		return g.handleCreateSession()
+		return g.handleCreateSession(req)
 	case req.Method == "POST" && strings.HasPrefix(path, "/v1/sessions/") && strings.HasSuffix(path, "/assisted-mint"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/sessions/"), "/assisted-mint")
 		return g.handleAssistedMint(id, req)
@@ -220,8 +264,9 @@ type createSessionResponse struct {
 	AssistedMint         bool   `json:"assisted_mint_available"`
 }
 
-func (g *Gateway) handleCreateSession() Response {
+func (g *Gateway) handleCreateSession(req Request) Response {
 	g.gcSessions()
+	sourceKey := g.sourceKey(req.SourceIP)
 	var idBytes, nonce [32]byte
 	if _, err := rand.Read(idBytes[:]); err != nil {
 		return jsonErr(500, "entropy: "+err.Error())
@@ -234,11 +279,26 @@ func (g *Gateway) handleCreateSession() Response {
 	sess := &session{
 		ID:                id,
 		Origin:            g.cfg.Origin,
+		SourceKey:         sourceKey,
 		PresentationNonce: nonce,
 		Created:           now,
 		Expires:           now.Add(SessionTTL),
 	}
 	g.mu.Lock()
+	if len(g.sessions) >= MaxOpenSessions {
+		g.mu.Unlock()
+		return jsonErr(429, "too many open sessions; retry shortly")
+	}
+	perSource := 0
+	for _, s := range g.sessions {
+		if s.SourceKey == sourceKey {
+			perSource++
+		}
+	}
+	if perSource >= MaxOpenSessionsPerSource {
+		g.mu.Unlock()
+		return jsonErr(429, "too many open sessions from this source; retry shortly")
+	}
 	g.sessions[id] = sess
 	g.mu.Unlock()
 	return jsonOK(createSessionResponse{
@@ -255,11 +315,14 @@ func (g *Gateway) handleCreateSession() Response {
 }
 
 type assistedMintRequest struct {
-	SubjectValueX string `json:"subject_value_x,omitempty"`
-	BucketID      string `json:"bucket_id,omitempty"`
 	// HolderPubB64: client-generated Ed25519 public key (32 bytes,
 	// base64url). Required — the holder private key must never leave the
 	// client, so the gateway will not generate keys on the client's behalf.
+	//
+	// Note there is deliberately no subject or bucket field: the mint
+	// identity that budgets are keyed on is server-owned. A client that
+	// could choose its own bucket_id would sidestep the per-bucket budget
+	// by inventing a new bucket per mint.
 	HolderPubB64 string `json:"holder_pub_b64"`
 }
 
@@ -289,13 +352,6 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 			return jsonErr(400, "json: "+err.Error())
 		}
 	}
-	if body.SubjectValueX == "" {
-		body.SubjectValueX = "dev-measurement"
-	}
-	if body.BucketID == "" {
-		body.BucketID = "runtime-1"
-	}
-
 	if body.HolderPubB64 == "" {
 		return jsonErr(400, "holder_pub_b64 required: generate the Ed25519 keypair on the client and send only the public key")
 	}
@@ -317,15 +373,18 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 	)
 	target, state := tokenprofile.PrepareBlind(input.Bytes(), additionalR)
 
+	// The budget bucket is the session's source key, so each source spends
+	// against its own per-window budget — one greedy client cannot starve
+	// the rest of the population, and no client can name its own bucket.
 	now := g.clock.Now()
 	decision := g.policy.AuthorizeMint(tokenauth.MintRequest{
 		Subject: tokenauth.Subject{
-			ValueX:   body.SubjectValueX,
+			ValueX:   devSubjectValueX,
 			Platform: "software-witness",
 		},
 		Eligibility: []tokenauth.Eligibility{{
 			GateKind:  tokenauth.GateTEE,
-			BucketID:  body.BucketID,
+			BucketID:  sess.SourceKey,
 			Assurance: tokenauth.AssuranceVerified,
 		}},
 		TokenFamily: tokenauth.TokenPrivateIdentity,

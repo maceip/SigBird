@@ -25,6 +25,17 @@ the private-identity showcase above.
 Tamayo owns crypto + token profiles. **This service** owns HTTP, sessions,
 presentation-nonce replay, S3 (or DevX stand-in), and abuse policy.
 
+### Anti-spam shape
+
+Tokens are cheap by design; scarcity lives in the mint gate. The tokenauth
+budget is keyed per **bucket**, and the bucket is server-owned: in dev it is
+a salted hash of the request source, so every source has its own
+mints-per-window budget — a greedy client exhausts only itself, and no
+client can name its own bucket to escape the limit. Sessions are capped
+globally and per source. In production the bucket comes from verified
+evidence (attestation `bucket_claim`, or the tamayo `mailbox` HMAC bucket —
+account-bound without revealing the address).
+
 ## Design goals
 
 1. **One core, many edges** — `internal/core.Gateway.Handle(Request) Response`

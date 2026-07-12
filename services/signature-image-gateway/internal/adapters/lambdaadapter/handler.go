@@ -18,13 +18,14 @@ import (
 // event we need. Defined locally so the module does not require the AWS
 // Lambda SDK just to compile the portable core + local server.
 type APIGatewayV2Request struct {
-	RawPath                 string            `json:"rawPath"`
-	Body                    string            `json:"body"`
-	IsBase64Encoded         bool              `json:"isBase64Encoded"`
-	Headers                 map[string]string `json:"headers"`
-	RequestContext          struct {
+	RawPath         string            `json:"rawPath"`
+	Body            string            `json:"body"`
+	IsBase64Encoded bool              `json:"isBase64Encoded"`
+	Headers         map[string]string `json:"headers"`
+	RequestContext  struct {
 		HTTP struct {
-			Method string `json:"method"`
+			Method   string `json:"method"`
+			SourceIP string `json:"sourceIp"`
 		} `json:"http"`
 	} `json:"requestContext"`
 }
@@ -60,10 +61,11 @@ func (h Handler) Handle(ctx context.Context, event APIGatewayV2Request) (APIGate
 		path = "/"
 	}
 	resp := h.Gateway.Handle(ctx, core.Request{
-		Method:  event.RequestContext.HTTP.Method,
-		Path:    path,
-		Headers: headers,
-		Body:    body,
+		Method:   event.RequestContext.HTTP.Method,
+		Path:     path,
+		Headers:  headers,
+		Body:     body,
+		SourceIP: event.RequestContext.HTTP.SourceIP,
 	})
 	return APIGatewayV2Response{
 		StatusCode: resp.Status,

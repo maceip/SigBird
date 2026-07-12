@@ -3,6 +3,7 @@ package app.k9mail.library.signatureeditor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import net.i2p.crypto.eddsa.EdDSAEngine
 import net.i2p.crypto.eddsa.EdDSAPrivateKey
@@ -45,9 +46,21 @@ class SignatureImageHostClient(
             "unexpected session origin '$origin' (expected '$challengePrefix')"
         }
 
-        val mint = postJson("/v1/sessions/$sessionId/assisted-mint", JSONObject())
+        // The holder key is generated here and the private seed never leaves
+        // the device — the gateway only ever sees the public key it blinds
+        // the issuer signature over.
+        val holderSeed = ByteArray(ED25519_SEED_BYTES).also { SecureRandom().nextBytes(it) }
+        val holderPubB64 = b64Encode(ed25519PublicKey(holderSeed))
+
+        val mint = postJson(
+            "/v1/sessions/$sessionId/assisted-mint",
+            JSONObject().put("holder_pub_b64", holderPubB64),
+        )
         val tokenB64 = mint.getString("token_b64")
-        val holderSeedB64 = mint.getString("holder_seed_b64")
+        require(!mint.has("holder_seed_b64")) { "gateway must not return a holder seed" }
+        require(mint.getString("holder_pub_b64") == holderPubB64) {
+            "gateway echoed a different holder key"
+        }
 
         val tokenBytes = b64Decode(tokenB64)
         val tokenDigest = sha256(tokenBytes)
@@ -56,7 +69,7 @@ class SignatureImageHostClient(
 
         val issuedAt = System.currentTimeMillis() / 1000L
         val message = privateIdentityPresentationMessage(origin, nonce, tokenDigest, issuedAt)
-        val signature = signEd25519(b64Decode(holderSeedB64), message)
+        val signature = signEd25519(holderSeed, message)
 
         val shaHex = sha256(webpBytes).joinToString("") { "%02x".format(it) }
         val uploadReq = JSONObject()
@@ -144,7 +157,15 @@ class SignatureImageHostClient(
             return buffer.array()
         }
 
-        private fun signEd25519(seed: ByteArray, message: ByteArray): ByteArray {
+        /** Derives the 32-byte Ed25519 public key (A) for a locally held seed. */
+        internal fun ed25519PublicKey(seed: ByteArray): ByteArray {
+            require(seed.size == ED25519_SEED_BYTES) { "ed25519 seed must be $ED25519_SEED_BYTES bytes" }
+            val spec = EdDSANamedCurveTable.getByName("Ed25519")
+                ?: error("Ed25519 curve missing")
+            return EdDSAPrivateKey(EdDSAPrivateKeySpec(seed, spec)).abyte
+        }
+
+        internal fun signEd25519(seed: ByteArray, message: ByteArray): ByteArray {
             require(seed.size == ED25519_SEED_BYTES) { "ed25519 seed must be $ED25519_SEED_BYTES bytes" }
             val spec = EdDSANamedCurveTable.getByName("Ed25519")
                 ?: error("Ed25519 curve missing")

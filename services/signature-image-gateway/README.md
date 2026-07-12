@@ -6,7 +6,9 @@ Portable **product** gateway for hosting signature images (WebP ≤ 256 KiB).
 
 Auth uses tamayo **private-identity** tokens:
 
-1. Client holds an Ed25519 (or PQ) **holder key**
+1. Client **generates** an Ed25519 (or PQ) **holder key on-device** and sends
+   only the public key — the gateway never generates keys for a client and
+   never returns a seed
 2. Issuer places a **blinded PoMFRIT signature** over that holder public key
 3. Client **presents** with a proof-of-possession of the holder key
 4. Verifier learns only an **origin-bound pseudonym** — never an email address
@@ -22,6 +24,17 @@ the private-identity showcase above.
 
 Tamayo owns crypto + token profiles. **This service** owns HTTP, sessions,
 presentation-nonce replay, S3 (or DevX stand-in), and abuse policy.
+
+### Anti-spam shape
+
+Tokens are cheap by design; scarcity lives in the mint gate. The tokenauth
+budget is keyed per **bucket**, and the bucket is server-owned: in dev it is
+a salted hash of the request source, so every source has its own
+mints-per-window budget — a greedy client exhausts only itself, and no
+client can name its own bucket to escape the limit. Sessions are capped
+globally and per source. In production the bucket comes from verified
+evidence (attestation `bucket_claim`, or the tamayo `mailbox` HMAC bucket —
+account-bound without revealing the address).
 
 ## Design goals
 
@@ -50,12 +63,14 @@ Smoke prints `token_family=private_identity`, `email=<nil>`, and the
 | `GET` | `/healthz` | Liveness (`token_family`, `email: null`) |
 | `GET` | `/v1/issuer` | Public issuer info + origin |
 | `POST` | `/v1/sessions` | Session + presentation nonce |
-| `POST` | `/v1/sessions/{id}/assisted-mint` | **Dev** — blind-mint private-identity token |
+| `POST` | `/v1/sessions/{id}/assisted-mint` | **Dev** — blind-mint over the client's `holder_pub_b64` (required) |
 | `POST` | `/v1/uploads` | Holder PoP → spend nonce → presigned PUT |
-| `PUT` | `/v1/dev-put/{key}` | DevX memory store |
+| `PUT` | `/v1/dev-put/{key}` | DevX memory store (enforces presigned sha/len/type) |
 | `GET` | `/v1/dev-get/{key}` | DevX fetch |
 
-Upload constraints: `Content-Type: image/webp`, body ≤ **262144** bytes.
+Upload constraints: `Content-Type: image/webp`, body ≤ **262144** bytes, and
+the PUT body must match the SHA-256 + length presented at `/v1/uploads` —
+the presigned grant is single-use and expires after 5 minutes.
 
 ## Layout
 

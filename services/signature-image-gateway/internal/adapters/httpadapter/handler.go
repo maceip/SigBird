@@ -5,6 +5,7 @@ package httpadapter
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -29,7 +30,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), 400)
 				return
 			}
-			if err := h.Presigner.Put(key, body); err != nil {
+			if err := h.Presigner.Put(key, body, r.Header.Get("Content-Type")); err != nil {
 				http.Error(w, err.Error(), 400)
 				return
 			}
@@ -57,14 +58,29 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp := h.Gateway.Handle(r.Context(), core.Request{
-		Method:  r.Method,
-		Path:    path,
-		Headers: headers,
-		Body:    body,
+		Method:   r.Method,
+		Path:     path,
+		Headers:  headers,
+		Body:     body,
+		SourceIP: sourceIP(r),
 	})
 	for k, v := range resp.Headers {
 		w.Header().Set(k, v)
 	}
 	w.WriteHeader(resp.Status)
 	_, _ = w.Write(resp.Body)
+}
+
+// sourceIP prefers the first X-Forwarded-For hop (set by the fronting
+// proxy/CDN) and falls back to the socket peer address.
+func sourceIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		first, _, _ := strings.Cut(xff, ",")
+		return strings.TrimSpace(first)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

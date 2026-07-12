@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -36,6 +37,24 @@ const (
 	SessionTTL          = 10 * time.Minute
 	DefaultMaxSkew      = 2 * time.Minute
 	DefaultOrigin       = "sigbird-signature-upload"
+
+	// MaxOpenSessions bounds the unauthenticated sessions map so a flood of
+	// POST /v1/sessions cannot grow memory without limit inside the TTL.
+	MaxOpenSessions = 4096
+	// MaxOpenSessionsPerSource keeps one flooding source from consuming the
+	// whole MaxOpenSessions table and starving other clients of sessions.
+	MaxOpenSessionsPerSource = 64
+
+	// devSubjectValueX is the fixed DevX mint subject. The budget bucket is
+	// server-owned on purpose: the tokenauth budget is keyed by
+	// gate:bucket:group, so a client that could name its own bucket would
+	// mint itself a fresh budget per request. In dev the bucket is derived
+	// from the request source (HMAC of the client IP), so each source gets
+	// its own mints-per-window budget — one greedy client exhausts only its
+	// own bucket. Production derives the bucket from verified evidence
+	// (attestation bucket_claim, or the mailbox HMAC bucket — natural for a
+	// mail client) that the client cannot fabricate.
+	devSubjectValueX = "dev-measurement"
 )
 
 // Request is a platform-neutral HTTP-ish request.
@@ -44,6 +63,10 @@ type Request struct {
 	Path    string
 	Headers map[string]string
 	Body    []byte
+	// SourceIP is the client address as reported by the edge adapter
+	// (Lambda source IP, or X-Forwarded-For / RemoteAddr for plain HTTP).
+	// Dev-mode budget buckets and session caps key off it.
+	SourceIP string
 }
 
 // Response is a platform-neutral HTTP-ish response.
@@ -53,9 +76,21 @@ type Response struct {
 	Body    []byte
 }
 
+// PresignPutInput pins everything the object store must enforce at PUT time.
+// A real S3 presigner signs ContentType, ContentLength, and the SHA-256
+// checksum header so the store rejects bytes that differ from what the
+// client presented; the DevX MemoryPresigner enforces the same contract.
+type PresignPutInput struct {
+	Key           string
+	ContentType   string
+	ContentLength int64
+	ContentSHA256 [32]byte
+	TTL           time.Duration
+}
+
 // Presigner issues short-lived write credentials for one object.
 type Presigner interface {
-	PresignPut(ctx context.Context, key string, contentType string, maxBytes int64, ttl time.Duration) (uploadURL, publicURL string, err error)
+	PresignPut(ctx context.Context, in PresignPutInput) (uploadURL, publicURL string, err error)
 }
 
 // Clock abstracts time for tests.
@@ -90,15 +125,22 @@ type Gateway struct {
 	budgets   tokenauth.BudgetStore
 	presigner Presigner
 	clock     Clock
+	// srcSalt keys the source-IP hash so budget buckets and logs never
+	// carry raw client addresses. Process-local, like the memory stores.
+	srcSalt [32]byte
 
 	mu       sync.Mutex
 	sessions map[string]*session
-	seenPvt  map[string]bool // origin\x00nonce replay set
+	// seenPvt is the origin\x00nonce spend-once set. Values are expiry
+	// times: an entry only has to outlive the session that issued the
+	// nonce, after which the nonce is unreachable and the entry is GC'd.
+	seenPvt map[string]time.Time
 }
 
 type session struct {
 	ID                string
 	Origin            string
+	SourceKey         string
 	PresentationNonce [32]byte
 	Created           time.Time
 	Expires           time.Time
@@ -137,6 +179,10 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+	var srcSalt [32]byte
+	if _, err := rand.Read(srcSalt[:]); err != nil {
+		return nil, fmt.Errorf("source salt: %w", err)
+	}
 	return &Gateway{
 		cfg:       cfg,
 		issuer:    issuer,
@@ -145,9 +191,22 @@ func New(
 		budgets:   budgets,
 		presigner: presigner,
 		clock:     realClock{},
+		srcSalt:   srcSalt,
 		sessions:  make(map[string]*session),
-		seenPvt:   make(map[string]bool),
+		seenPvt:   make(map[string]time.Time),
 	}, nil
+}
+
+// sourceKey collapses a client address into a salted, non-reversible bucket
+// id. Unknown sources share one bucket rather than being rejected, so a
+// proxy that strips the address degrades to a shared budget, not an outage.
+func (g *Gateway) sourceKey(sourceIP string) string {
+	src := strings.TrimSpace(sourceIP)
+	if src == "" {
+		return "src-unknown"
+	}
+	sum := sha256.Sum256(append(g.srcSalt[:], src...))
+	return "src-" + hex.EncodeToString(sum[:8])
 }
 
 // Handle routes a portable request. Paths are matched without a host prefix.
@@ -167,7 +226,7 @@ func (g *Gateway) Handle(ctx context.Context, req Request) Response {
 	case req.Method == "GET" && path == "/v1/issuer":
 		return g.handleIssuerInfo()
 	case req.Method == "POST" && path == "/v1/sessions":
-		return g.handleCreateSession()
+		return g.handleCreateSession(req)
 	case req.Method == "POST" && strings.HasPrefix(path, "/v1/sessions/") && strings.HasSuffix(path, "/assisted-mint"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/sessions/"), "/assisted-mint")
 		return g.handleAssistedMint(id, req)
@@ -205,8 +264,9 @@ type createSessionResponse struct {
 	AssistedMint         bool   `json:"assisted_mint_available"`
 }
 
-func (g *Gateway) handleCreateSession() Response {
+func (g *Gateway) handleCreateSession(req Request) Response {
 	g.gcSessions()
+	sourceKey := g.sourceKey(req.SourceIP)
 	var idBytes, nonce [32]byte
 	if _, err := rand.Read(idBytes[:]); err != nil {
 		return jsonErr(500, "entropy: "+err.Error())
@@ -219,11 +279,26 @@ func (g *Gateway) handleCreateSession() Response {
 	sess := &session{
 		ID:                id,
 		Origin:            g.cfg.Origin,
+		SourceKey:         sourceKey,
 		PresentationNonce: nonce,
 		Created:           now,
 		Expires:           now.Add(SessionTTL),
 	}
 	g.mu.Lock()
+	if len(g.sessions) >= MaxOpenSessions {
+		g.mu.Unlock()
+		return jsonErr(429, "too many open sessions; retry shortly")
+	}
+	perSource := 0
+	for _, s := range g.sessions {
+		if s.SourceKey == sourceKey {
+			perSource++
+		}
+	}
+	if perSource >= MaxOpenSessionsPerSource {
+		g.mu.Unlock()
+		return jsonErr(429, "too many open sessions from this source; retry shortly")
+	}
 	g.sessions[id] = sess
 	g.mu.Unlock()
 	return jsonOK(createSessionResponse{
@@ -240,12 +315,15 @@ func (g *Gateway) handleCreateSession() Response {
 }
 
 type assistedMintRequest struct {
-	SubjectValueX string `json:"subject_value_x,omitempty"`
-	BucketID      string `json:"bucket_id,omitempty"`
-	// HolderPubB64: optional client-supplied Ed25519 public key (32 bytes).
-	// If omitted in DevX, the gateway generates a holder keypair and returns
-	// the seed so the smoke client can sign presentations.
-	HolderPubB64 string `json:"holder_pub_b64,omitempty"`
+	// HolderPubB64: client-generated Ed25519 public key (32 bytes,
+	// base64url). Required — the holder private key must never leave the
+	// client, so the gateway will not generate keys on the client's behalf.
+	//
+	// Note there is deliberately no subject or bucket field: the mint
+	// identity that budgets are keyed on is server-owned. A client that
+	// could choose its own bucket_id would sidestep the per-bucket budget
+	// by inventing a new bucket per mint.
+	HolderPubB64 string `json:"holder_pub_b64"`
 }
 
 type assistedMintResponse struct {
@@ -254,7 +332,6 @@ type assistedMintResponse struct {
 	TokenB64             string `json:"token_b64"`
 	HolderAlg            string `json:"holder_alg"`
 	HolderPubB64         string `json:"holder_pub_b64"`
-	HolderSeedB64        string `json:"holder_seed_b64,omitempty"` // DevX only
 	Origin               string `json:"origin"`
 	PresentationNonceB64 string `json:"presentation_nonce_b64"`
 	PseudonymHex         string `json:"pseudonym_hex"`
@@ -275,33 +352,14 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 			return jsonErr(400, "json: "+err.Error())
 		}
 	}
-	if body.SubjectValueX == "" {
-		body.SubjectValueX = "dev-measurement"
+	if body.HolderPubB64 == "" {
+		return jsonErr(400, "holder_pub_b64 required: generate the Ed25519 keypair on the client and send only the public key")
 	}
-	if body.BucketID == "" {
-		body.BucketID = "runtime-1"
+	raw, err := decodeB64(body.HolderPubB64)
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return jsonErr(400, "holder_pub_b64 must be 32 raw bytes (base64url)")
 	}
-
-	var (
-		holderPub  ed25519.PublicKey
-		holderPriv ed25519.PrivateKey
-		holderSeed []byte
-		err        error
-	)
-	if body.HolderPubB64 != "" {
-		raw, err := decodeB64(body.HolderPubB64)
-		if err != nil || len(raw) != ed25519.PublicKeySize {
-			return jsonErr(400, "holder_pub_b64 must be 32 raw bytes (base64url)")
-		}
-		holderPub = ed25519.PublicKey(raw)
-		// Client keeps the private key; we cannot return a seed.
-	} else {
-		holderPub, holderPriv, err = ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			return jsonErr(500, "holder keygen: "+err.Error())
-		}
-		holderSeed = holderPriv.Seed()
-	}
+	holderPub := ed25519.PublicKey(raw)
 
 	var additionalR [32]byte
 	if _, err := rand.Read(additionalR[:]); err != nil {
@@ -315,15 +373,18 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 	)
 	target, state := tokenprofile.PrepareBlind(input.Bytes(), additionalR)
 
+	// The budget bucket is the session's source key, so each source spends
+	// against its own per-window budget — one greedy client cannot starve
+	// the rest of the population, and no client can name its own bucket.
 	now := g.clock.Now()
 	decision := g.policy.AuthorizeMint(tokenauth.MintRequest{
 		Subject: tokenauth.Subject{
-			ValueX:   body.SubjectValueX,
+			ValueX:   devSubjectValueX,
 			Platform: "software-witness",
 		},
 		Eligibility: []tokenauth.Eligibility{{
 			GateKind:  tokenauth.GateTEE,
-			BucketID:  body.BucketID,
+			BucketID:  sess.SourceKey,
 			Assurance: tokenauth.AssuranceVerified,
 		}},
 		TokenFamily: tokenauth.TokenPrivateIdentity,
@@ -351,7 +412,7 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 	pvt := tokenprofile.PrivateIdentityToken{Input: input, Authenticator: authenticator}
 	pseudonym := pvt.PseudonymForOrigin(sess.Origin)
 
-	out := assistedMintResponse{
+	return jsonOK(assistedMintResponse{
 		TokenFamily:          "private_identity",
 		Email:                nil,
 		TokenB64:             b64(pvt.Bytes()),
@@ -360,14 +421,10 @@ func (g *Gateway) handleAssistedMint(sessionID string, req Request) Response {
 		Origin:               sess.Origin,
 		PresentationNonceB64: b64(sess.PresentationNonce[:]),
 		PseudonymHex:         hex.EncodeToString(pseudonym[:]),
-		Note: "Showcase: blinded PoMFRIT signature over the client holder key. " +
-			"No email is in the token. Present with a holder PoP to reveal only an origin-bound pseudonym. " +
-			"DevX may return holder_seed_b64; production clients generate and keep the key locally.",
-	}
-	if holderSeed != nil {
-		out.HolderSeedB64 = b64(holderSeed)
-	}
-	return jsonOK(out)
+		Note: "Showcase: blinded PoMFRIT signature over the client-held holder key. " +
+			"No email is in the token and the holder private key never leaves the client. " +
+			"Present with a holder PoP to reveal only an origin-bound pseudonym.",
+	})
 }
 
 type uploadRequest struct {
@@ -427,17 +484,20 @@ func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
 	if err != nil {
 		return jsonErr(400, "signature_b64: "+err.Error())
 	}
-	if body.IssuedAt == 0 {
-		body.IssuedAt = g.clock.Now().Unix()
+	// issued_at is covered by the holder PoP signature; a missing value can
+	// never verify against a client-signed message, so fail loudly instead
+	// of guessing a server-side timestamp.
+	if body.IssuedAt <= 0 {
+		return jsonErr(400, "issued_at required (unix seconds, signed into the presentation)")
 	}
 
 	replayKey := sess.Origin + "\x00" + string(sess.PresentationNonce[:])
 	g.mu.Lock()
-	if g.seenPvt[replayKey] {
+	if _, spent := g.seenPvt[replayKey]; spent {
 		g.mu.Unlock()
 		return jsonStatus(409, map[string]string{"error": "presentation nonce already used for this origin"})
 	}
-	g.seenPvt[replayKey] = true
+	g.seenPvt[replayKey] = sess.Expires
 	g.mu.Unlock()
 
 	pseudonym, err := g.issuer.VerifyPrivateIdentityPresentation(tokenprofile.PrivateIdentityPresentation{
@@ -460,7 +520,15 @@ func (g *Gateway) handleUpload(ctx context.Context, req Request) Response {
 	key := fmt.Sprintf("sig/%04d/%02d/%s/%s.webp",
 		now.Year(), int(now.Month()), hex.EncodeToString(shaBytes[:4]), body.SessionID)
 	const ttl = 5 * time.Minute
-	uploadURL, publicURL, err := g.presigner.PresignPut(ctx, key, RequiredContentType, body.ContentLength, ttl)
+	var contentSHA [32]byte
+	copy(contentSHA[:], shaBytes)
+	uploadURL, publicURL, err := g.presigner.PresignPut(ctx, PresignPutInput{
+		Key:           key,
+		ContentType:   RequiredContentType,
+		ContentLength: body.ContentLength,
+		ContentSHA256: contentSHA,
+		TTL:           ttl,
+	})
 	if err != nil {
 		g.mu.Lock()
 		delete(g.seenPvt, replayKey)
@@ -502,6 +570,11 @@ func (g *Gateway) gcSessions() {
 	for id, sess := range g.sessions {
 		if now.After(sess.Expires) {
 			delete(g.sessions, id)
+		}
+	}
+	for key, expires := range g.seenPvt {
+		if now.After(expires) {
+			delete(g.seenPvt, key)
 		}
 	}
 }

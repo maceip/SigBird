@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -45,20 +46,26 @@ func run(base string) error {
 	nonceB64 := sess["presentation_nonce_b64"].(string)
 	fmt.Printf("origin=%s (no email)\n", origin)
 
+	fmt.Println("== holder keygen (client-side; private key never leaves this process) ==")
+	holderPub, holderPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("== assisted-mint (blind sig over client holder key) ==")
-	mint, err := postJSON(base+"/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	mint, err := postJSON(base+"/v1/sessions/"+sid+"/assisted-mint", map[string]any{
+		"holder_pub_b64": base64.RawURLEncoding.EncodeToString(holderPub),
+	})
 	if err != nil {
 		return err
 	}
 	fmt.Printf("token_family=%v email=%v\n", mint["token_family"], mint["email"])
 	fmt.Printf("holder_alg=%v pseudonym=%v\n", mint["holder_alg"], mint["pseudonym_hex"])
 	fmt.Printf("note: %v\n", mint["note"])
-
-	seed, err := base64.RawURLEncoding.DecodeString(mint["holder_seed_b64"].(string))
-	if err != nil {
-		return err
+	if _, leaked := mint["holder_seed_b64"]; leaked {
+		return fmt.Errorf("gateway returned a holder seed; refusing to continue")
 	}
-	holderPriv := ed25519.NewKeyFromSeed(seed)
+
 	tokenBytes, err := base64.RawURLEncoding.DecodeString(mint["token_b64"].(string))
 	if err != nil {
 		return err

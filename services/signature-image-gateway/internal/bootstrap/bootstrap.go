@@ -15,10 +15,10 @@ import (
 
 // Options wires a Gateway from files + env — shared by every edge adapter.
 type Options struct {
-	Mode           string // dev | prod
-	IssuerPath     string
-	PolicyPath     string
-	PublicBase     string // e.g. http://127.0.0.1:8790
+	Mode            string // dev | prod
+	IssuerPath      string
+	PolicyPath      string
+	PublicBase      string // e.g. http://127.0.0.1:8790
 	ChallengePrefix string
 }
 

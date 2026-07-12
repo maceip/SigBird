@@ -91,12 +91,16 @@ jobs:
           tb_new_version_code=$(version_code app-thunderbird/build.gradle.kts)
           full_version_name="${tb_version_name}-SNAPSHOT"
           tag_version="${full_version_name//./_}"
-          tag_name="DEBUG_${tag_version}_${tb_new_version_code}"
+          # Include short SHA so softprops never updates an older DEBUG_* release when
+          # versionCode is recycled (that made the Releases page look days stale).
+          short_sha=$(git rev-parse --short=7 HEAD)
+          tag_name="DEBUG_${tag_version}_${tb_new_version_code}_${short_sha}"
 
           {
             echo "THUNDERBIRD_VERSION_NAME=${tb_version_name}"
             echo "FULL_VERSION_NAME=${full_version_name}"
             echo "TAG_NAME=${tag_name}"
+            echo "SHORT_SHA=${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Commit version bump
@@ -168,9 +172,10 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ steps.version.outputs.TAG_NAME }}
-          name: Debug ${{ steps.version.outputs.FULL_VERSION_NAME }} (${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }})
+          name: Debug ${{ steps.version.outputs.FULL_VERSION_NAME }} (${{ steps.version.outputs.THUNDERBIRD_NEW_VERSION_CODE }}) ${{ steps.version.outputs.SHORT_SHA }}
           target_commitish: ${{ steps.commit.outputs.sha }}
           prerelease: true
+          make_latest: true
           fail_on_unmatched_files: true
           body: |
             Automated debug build from commit ${{ steps.commit.outputs.sha }}.

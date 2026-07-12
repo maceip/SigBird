@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import app.k9mail.library.signatureeditor.rememberSignatureHtmlEditorController
 import net.thunderbird.components.ui.bolt.atom.Checkbox
 import net.thunderbird.components.ui.bolt.atom.RadioGroup
 import net.thunderbird.components.ui.bolt.atom.Surface
@@ -116,6 +117,19 @@ fun AccountSetupCompositionScreen(
     onEvent: (Event) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val signatureEditorController = rememberSignatureHtmlEditorController()
+
+    fun updateUseSignature(enabled: Boolean) {
+        if (useSignature && !enabled) {
+            signatureEditorController.captureHtml(signature) { latestSignature ->
+                onEvent(Event.SignatureChange(latestSignature))
+                onEvent(Event.UseSignatureChange(false))
+            }
+        } else {
+            onEvent(Event.UseSignatureChange(enabled))
+        }
+    }
+
     Scaffold(
         modifier = modifier.testTag("composition_defaults_screen"),
         topBar = {
@@ -130,7 +144,12 @@ fun AccountSetupCompositionScreen(
                 actions = {
                     ButtonText(
                         enabled = saveActionEnabled,
-                        onClick = { onEvent(Event.SavePressed) },
+                        onClick = {
+                            signatureEditorController.captureHtml(signature) { latestSignature ->
+                                onEvent(Event.SignatureChange(latestSignature))
+                                onEvent(Event.SavePressed(latestSignature))
+                            }
+                        },
                         text = stringResource(R.string.edit_identity_save),
                         modifier = Modifier.testTag("composition_defaults_save"),
                     )
@@ -179,14 +198,14 @@ fun AccountSetupCompositionScreen(
                         .clickable(
                             enabled = true,
                             onClick = {
-                                onEvent(Event.UseSignatureChange(!useSignature))
+                                updateUseSignature(!useSignature)
                             },
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(
                         checked = useSignature,
-                        onCheckedChange = { onEvent(Event.UseSignatureChange(it)) },
+                        onCheckedChange = { updateUseSignature(it) },
                         modifier = Modifier.testTag("composition_use_signature"),
                     )
                     TextBodySmall(text = stringResource(R.string.account_settings_signature_use_label))
@@ -195,6 +214,7 @@ fun AccountSetupCompositionScreen(
                     SignatureHtmlEditor(
                         html = signature,
                         onHtmlChange = { onEvent(Event.SignatureChange(it)) },
+                        controller = signatureEditorController,
                         modifier = Modifier.testTag("composition_signature_editor"),
                     )
                     Spacer(modifier = Modifier.height(BoltTheme.spacings.half))

@@ -69,7 +69,7 @@ class AccountSetupCompositionViewModel(
             }
 
             is Event.SavePressed -> {
-                val sanitized = SignatureContent.sanitizeForStorage(account.signature)
+                val sanitized = SignatureContent.sanitizeForStorage(event.signature ?: account.signature)
                 account = account.copy(signature = sanitized)
                 saveAccount()
                 emitEffect(Effect.DoneUpdatingAccount)

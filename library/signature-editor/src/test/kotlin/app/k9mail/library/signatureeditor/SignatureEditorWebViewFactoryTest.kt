@@ -3,6 +3,14 @@ package app.k9mail.library.signatureeditor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import assertk.assertions.isEqualTo
+import assertk.assertions.isNotNull
+import assertk.assertions.isNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
 
 class SignatureEditorWebViewFactoryTest {
@@ -40,5 +48,51 @@ class SignatureEditorWebViewFactoryTest {
         )
 
         assertThat(document).contains("contenteditable=\"false\"")
+    }
+
+    @Test
+    fun `toHostedImageWebResourceResponse returns null for failed fetches`() {
+        // Arrange
+        val response = createResponse(
+            code = 404,
+            body = "<html>not found</html>",
+            contentType = "text/html",
+        )
+
+        // Act
+        val result = response.toHostedImageWebResourceResponse()
+
+        // Assert
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `toHostedImageWebResourceResponse keeps successful image responses`() {
+        // Arrange
+        val response = createResponse(
+            code = 200,
+            body = "webp",
+            contentType = "image/webp",
+        )
+
+        // Act
+        val result = response.toHostedImageWebResourceResponse()
+
+        // Assert
+        assertThat(result).isNotNull()
+    }
+
+    private fun createResponse(code: Int, body: String, contentType: String): Response {
+        val request = Request.Builder()
+            .url("https://tokens.public.computer/images/test.webp")
+            .build()
+
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message("HTTP $code")
+            .body(body.toResponseBody(contentType.toMediaType()))
+            .build()
     }
 }

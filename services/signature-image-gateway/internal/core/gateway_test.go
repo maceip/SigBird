@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -150,6 +151,56 @@ func TestRejectOversize(t *testing.T) {
 	}
 }
 
+func TestUploadAllowsRetryAfterPresignFailure(t *testing.T) {
+	// Arrange
+	issuer := newIssuer(t)
+	policy := compilePolicy(t)
+	presigner := &flakyPresigner{}
+	gw, err := core.New(core.Config{Mode: "dev"}, issuer, policy, presigner, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sess := postJSON(t, gw, "POST", "/v1/sessions", map[string]any{})
+	sid := sess["session_id"].(string)
+	mint := postJSON(t, gw, "POST", "/v1/sessions/"+sid+"/assisted-mint", map[string]any{})
+	seed, _ := base64.RawURLEncoding.DecodeString(mint["holder_seed_b64"].(string))
+	holderPriv := ed25519.NewKeyFromSeed(seed)
+	tokenBytes, _ := base64.RawURLEncoding.DecodeString(mint["token_b64"].(string))
+	token, _ := tokenprofile.ParsePrivateIdentityToken(tokenBytes)
+	nonceRaw, _ := base64.RawURLEncoding.DecodeString(sess["presentation_nonce_b64"].(string))
+	var nonce [32]byte
+	copy(nonce[:], nonceRaw)
+	issuedAt := time.Now().Unix()
+	msg := tokenprofile.PrivateIdentityPresentationMessage(sess["origin"].(string), nonce, token.Digest(), issuedAt)
+	sig := ed25519.Sign(holderPriv, msg)
+	sum := sha256.Sum256([]byte("retry"))
+	body := map[string]any{
+		"session_id":         sid,
+		"token_b64":          mint["token_b64"],
+		"signature_b64":      base64.RawURLEncoding.EncodeToString(sig),
+		"issued_at":          issuedAt,
+		"content_sha256_hex": hex.EncodeToString(sum[:]),
+		"content_length":     len(sum),
+		"content_type":       "image/webp",
+	}
+
+	// Act
+	firstResponse := raw(t, gw, "POST", "/v1/uploads", body)
+	secondResponse := raw(t, gw, "POST", "/v1/uploads", body)
+
+	// Assert
+	if firstResponse.Status != 500 {
+		t.Fatalf("first status=%d want 500 body=%s", firstResponse.Status, firstResponse.Body)
+	}
+	if secondResponse.Status != 200 {
+		t.Fatalf("second status=%d want 200 body=%s", secondResponse.Status, secondResponse.Body)
+	}
+	if presigner.attempts != 2 {
+		t.Fatalf("attempts=%d want 2", presigner.attempts)
+	}
+}
+
 func testGateway(t *testing.T) (*core.Gateway, *core.MemoryPresigner) {
 	t.Helper()
 	issuer := newIssuer(t)
@@ -211,4 +262,22 @@ func raw(t *testing.T, gw *core.Gateway, method, path string, body any) core.Res
 		Path:   path,
 		Body:   b,
 	})
+}
+
+type flakyPresigner struct {
+	attempts int
+}
+
+func (p *flakyPresigner) PresignPut(
+	ctx context.Context,
+	key string,
+	contentType string,
+	maxBytes int64,
+	ttl time.Duration,
+) (uploadURL, publicURL string, err error) {
+	p.attempts++
+	if p.attempts == 1 {
+		return "", "", errors.New("temporary presign failure")
+	}
+	return "http://upload.example.test", "http://public.example.test/object.webp", nil
 }

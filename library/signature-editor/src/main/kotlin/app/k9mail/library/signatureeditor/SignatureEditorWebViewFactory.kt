@@ -3,11 +3,31 @@ package app.k9mail.library.signatureeditor
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.view.ActionMode
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+
+internal class SignatureEditorWebView(
+    context: android.content.Context,
+) : WebView(context) {
+    private var activeActionMode: ActionMode? = null
+
+    override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
+        return super.startActionMode(callback).also { activeActionMode = it }
+    }
+
+    override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
+        return super.startActionMode(callback, type).also { activeActionMode = it }
+    }
+
+    fun finishActiveActionMode() {
+        activeActionMode?.finish()
+        activeActionMode = null
+    }
+}
 
 internal object SignatureEditorWebViewFactory {
     private const val CONTENT_CHANGE_DEBOUNCE_MS = 400L
@@ -21,8 +41,8 @@ internal object SignatureEditorWebViewFactory {
         onHtmlChange: (String) -> Unit,
         readOnly: Boolean = false,
         fontSizeSp: Float? = null,
-    ): WebView {
-        return WebView(context).apply {
+    ): SignatureEditorWebView {
+        return SignatureEditorWebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = false
             settings.allowFileAccess = false
@@ -165,8 +185,28 @@ internal object SignatureEditorWebViewFactory {
                 }
                 emitNow();
               });
+              function ensureEditableSelection() {
+                editor.focus();
+                var sel = window.getSelection();
+                if (!sel) {
+                  return null;
+                }
+                if (sel.rangeCount > 0) {
+                  var existing = sel.getRangeAt(0);
+                  if (editor.contains(existing.commonAncestorContainer)) {
+                    return existing;
+                  }
+                }
+                var range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                return range;
+              }
               window.SignatureEditor = {
                 command: function(name, value) {
+                  ensureEditableSelection();
                   if (typeof value === 'undefined' || value === null) {
                     document.execCommand(name, false, null);
                   } else {
@@ -175,11 +215,28 @@ internal object SignatureEditorWebViewFactory {
                   emitNow();
                 },
                 insertLink: function(url) {
+                  ensureEditableSelection();
                   document.execCommand('createLink', false, url);
                   emitNow();
                 },
                 insertImage: function(src) {
-                  document.execCommand('insertImage', false, src);
+                  var range = ensureEditableSelection();
+                  var img = document.createElement('img');
+                  img.setAttribute('src', src);
+                  img.setAttribute('alt', '');
+                  if (range) {
+                    range.deleteContents();
+                    range.insertNode(img);
+                    range.setStartAfter(img);
+                    range.collapse(true);
+                    var sel = window.getSelection();
+                    if (sel) {
+                      sel.removeAllRanges();
+                      sel.addRange(range);
+                    }
+                  } else {
+                    editor.appendChild(img);
+                  }
                   emitNow();
                 },
                 getHtml: function() {

@@ -72,6 +72,7 @@ class SignatureImageHostClientMockTest {
                         }
 
                         path.startsWith("/v1/dev-put/") -> MockResponse().setResponseCode(204)
+
                         else -> MockResponse().setResponseCode(404)
                     }
                 }

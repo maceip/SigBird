@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -125,6 +127,7 @@ private fun EditIdentityScreen(
     var replyTo by rememberSaveable { mutableStateOf(initialIdentity.replyTo.orEmpty()) }
     var useSignature by rememberSaveable { mutableStateOf(initialIdentity.signatureUse) }
     val signatureEditorController = rememberSignatureHtmlEditorController()
+    val signatureBringIntoView = remember { BringIntoViewRequester() }
 
     val canSave = remember(email, replyTo) {
         emailAddressValidator.isValidAddressOnly(email.trim()) &&
@@ -188,6 +191,7 @@ private fun EditIdentityScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = BoltTheme.spacings.double),
                 verticalArrangement = Arrangement.spacedBy(BoltTheme.spacings.double),
@@ -238,6 +242,7 @@ private fun EditIdentityScreen(
                         html = signature,
                         onHtmlChange = onSignatureChange,
                         controller = signatureEditorController,
+                        bringIntoViewRequester = signatureBringIntoView,
                         modifier = Modifier.testTag("edit_identity_signature_editor"),
                     )
                 }

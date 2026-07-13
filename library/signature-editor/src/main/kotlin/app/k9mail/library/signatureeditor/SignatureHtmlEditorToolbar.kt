@@ -1,19 +1,19 @@
 package app.k9mail.library.signatureeditor
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import net.thunderbird.components.ui.bolt.atom.DividerHorizontal
 import net.thunderbird.components.ui.bolt.atom.DividerVertical
 import net.thunderbird.components.ui.bolt.atom.button.ButtonIcon
 import net.thunderbird.components.ui.bolt.atom.button.ButtonIconColors
@@ -32,6 +32,11 @@ private sealed interface ToolbarEntry {
     data object Divider : ToolbarEntry
 }
 
+/**
+ * Multi-line formatting toolbar. Uses [FlowRow] so every control (including image)
+ * stays visible without horizontal scrolling.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SignatureFormattingToolbar(
     onCommand: (String, String?) -> Unit,
@@ -44,61 +49,50 @@ internal fun SignatureFormattingToolbar(
     val iconColors = ButtonIconDefaults.buttonIconColors(
         contentColor = BoltTheme.colors.onSurface,
     )
-    val entries = remember {
-        buildToolbarEntries(
-            onCommand = onCommand,
-            onInsertLink = onInsertLink,
-            onTextColor = onTextColor,
-            onFontSize = onFontSize,
-            onFontFamily = onFontFamily,
-            onInsertImage = onInsertImage,
-        )
-    }
+    // Rebuild each composition so lambdas always close over the latest WebView/actions.
+    val rows = listOf(
+        styleToolbarEntries(onCommand),
+        typographyToolbarEntries(onFontFamily, onFontSize, onTextColor),
+        listToolbarEntries(onCommand),
+        alignToolbarEntries(onCommand),
+        insertToolbarEntries(onCommand, onInsertLink, onInsertImage),
+    )
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(
                 horizontal = BoltTheme.spacings.half,
                 vertical = BoltTheme.spacings.quarter,
             ),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        entries.forEach { entry ->
-            when (entry) {
-                is ToolbarEntry.Divider -> ToolbarDivider()
+        rows.forEachIndexed { index, entries ->
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                entries.forEach { entry ->
+                    when (entry) {
+                        is ToolbarEntry.Divider -> ToolbarDivider()
 
-                is ToolbarEntry.Action -> ToolbarIconButton(
-                    onClick = entry.onClick,
-                    imageVector = entry.imageVector,
-                    contentDescription = stringResource(entry.descriptionRes),
-                    colors = iconColors,
-                    modifier = Modifier.testTag(entry.testTag),
+                        is ToolbarEntry.Action -> ToolbarIconButton(
+                            onClick = entry.onClick,
+                            imageVector = entry.imageVector,
+                            contentDescription = stringResource(entry.descriptionRes),
+                            colors = iconColors,
+                            modifier = Modifier.testTag(entry.testTag),
+                        )
+                    }
+                }
+            }
+            if (index < rows.lastIndex) {
+                DividerHorizontal(
+                    modifier = Modifier.padding(vertical = BoltTheme.spacings.quarter),
+                    color = BoltTheme.colors.outlineVariant,
                 )
             }
         }
-    }
-}
-
-private fun buildToolbarEntries(
-    onCommand: (String, String?) -> Unit,
-    onInsertLink: () -> Unit,
-    onTextColor: () -> Unit,
-    onFontSize: () -> Unit,
-    onFontFamily: () -> Unit,
-    onInsertImage: () -> Unit,
-): List<ToolbarEntry> {
-    return buildList {
-        addAll(styleToolbarEntries(onCommand))
-        add(ToolbarEntry.Divider)
-        addAll(typographyToolbarEntries(onFontFamily, onFontSize, onTextColor))
-        add(ToolbarEntry.Divider)
-        addAll(listToolbarEntries(onCommand))
-        add(ToolbarEntry.Divider)
-        addAll(alignToolbarEntries(onCommand))
-        add(ToolbarEntry.Divider)
-        addAll(insertToolbarEntries(onCommand, onInsertLink, onInsertImage))
     }
 }
 

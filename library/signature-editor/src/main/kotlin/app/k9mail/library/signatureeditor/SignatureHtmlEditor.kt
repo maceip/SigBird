@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,15 +52,17 @@ fun SignatureHtmlEditor(
     modifier: Modifier = Modifier,
     controller: SignatureHtmlEditorController? = null,
     label: String = stringResource(R.string.signature_editor_label),
+    bringIntoViewRequester: BringIntoViewRequester? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var webView by remember { mutableStateOf<WebView?>(null) }
+    var webView by remember { mutableStateOf<SignatureEditorWebView?>(null) }
     var showLinkDialog by remember { mutableStateOf(false) }
     var showColorDialog by remember { mutableStateOf(false) }
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showFontFamilyDialog by remember { mutableStateOf(false) }
     var linkUrl by remember { mutableStateOf("https://") }
+    var imageInsertStatus by remember { mutableStateOf<ImageInsertStatus>(ImageInsertStatus.Idle) }
     val imageHost = remember {
         SignatureImageHostClient(
             baseUrl = BuildConfig.SIGNATURE_GATEWAY_BASE,
@@ -69,30 +74,38 @@ fun SignatureHtmlEditor(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val target = webView
-        scope.launch {
-            val publicUrl = withContext(Dispatchers.IO) {
-                uri.toHostedSignatureImageUrl(context, imageHost)
-            } ?: return@launch
-            target?.evaluateJavascript(
-                "window.SignatureEditor.insertImage(${publicUrl.toJsString()});",
-                null,
-            )
-        }
+        insertPickedImage(
+            scope = scope,
+            context = context,
+            uri = uri,
+            imageHost = imageHost,
+            webViewProvider = { webView },
+            onStatus = { imageInsertStatus = it },
+        )
     }
 
     fun runCommand(command: String, value: String? = null) {
+        val editor = webView ?: return
+        editor.finishActiveActionMode()
+        editor.requestFocus()
         val js = if (value == null) {
             "window.SignatureEditor.command(${command.toJsString()});"
         } else {
             "window.SignatureEditor.command(${command.toJsString()}, ${value.toJsString()});"
         }
-        webView?.evaluateJavascript(js, null)
+        editor.evaluateJavascript(js, null)
+    }
+
+    val relocationModifier = if (bringIntoViewRequester != null) {
+        Modifier.bringIntoViewRequester(bringIntoViewRequester)
+    } else {
+        Modifier
     }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(relocationModifier)
             .testTag("signature_html_editor"),
         verticalArrangement = Arrangement.spacedBy(BoltTheme.spacings.half),
     ) {
@@ -116,21 +129,8 @@ fun SignatureHtmlEditor(
             contentColor = BoltTheme.colors.onSurface,
         ) {
             Column {
-                SignatureFormattingToolbar(
-                    onCommand = { command, value -> runCommand(command, value) },
-                    onInsertLink = { showLinkDialog = true },
-                    onTextColor = { showColorDialog = true },
-                    onFontSize = { showFontSizeDialog = true },
-                    onFontFamily = { showFontFamilyDialog = true },
-                    onInsertImage = {
-                        imagePicker.launch(
-                            arrayOf("image/png", "image/jpeg", "image/gif", "image/webp"),
-                        )
-                    },
-                )
-
-                DividerHorizontal(color = BoltTheme.colors.outlineVariant)
-
+                // Canvas first so the system text-selection ActionMode (above the
+                // caret) does not sit on top of the formatting controls.
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = EDITOR_CANVAS_COLOR,
@@ -150,6 +150,15 @@ fun SignatureHtmlEditor(
                             ).also { created ->
                                 created.contentDescription = "signature_html_editor_webview"
                                 created.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                if (bringIntoViewRequester != null) {
+                                    created.setOnFocusChangeListener { _, hasFocus ->
+                                        if (hasFocus) {
+                                            scope.launch {
+                                                bringIntoViewRequester.bringIntoView()
+                                            }
+                                        }
+                                    }
+                                }
                                 webView = created
                                 controller?.attachWebView(created)
                             }
@@ -160,64 +169,72 @@ fun SignatureHtmlEditor(
                         },
                     )
                 }
+
+                DividerHorizontal(color = BoltTheme.colors.outlineVariant)
+
+                SignatureFormattingToolbar(
+                    onCommand = { command, value -> runCommand(command, value) },
+                    onInsertLink = {
+                        webView?.finishActiveActionMode()
+                        showLinkDialog = true
+                    },
+                    onTextColor = {
+                        webView?.finishActiveActionMode()
+                        showColorDialog = true
+                    },
+                    onFontSize = {
+                        webView?.finishActiveActionMode()
+                        showFontSizeDialog = true
+                    },
+                    onFontFamily = {
+                        webView?.finishActiveActionMode()
+                        showFontFamilyDialog = true
+                    },
+                    onInsertImage = {
+                        webView?.finishActiveActionMode()
+                        imagePicker.launch(
+                            arrayOf("image/png", "image/jpeg", "image/gif", "image/webp"),
+                        )
+                    },
+                )
             }
         }
+
+        ImageInsertStatusBanner(status = imageInsertStatus)
     }
 
-    if (showLinkDialog) {
-        SignatureLinkDialog(
-            linkUrl = linkUrl,
-            onLinkUrlChange = { linkUrl = it },
-            onConfirm = {
-                val safeUrl = linkUrl.trim()
-                if (safeUrl.startsWith("https://") ||
-                    safeUrl.startsWith("http://") ||
-                    safeUrl.startsWith("mailto:")
-                ) {
-                    webView?.evaluateJavascript(
-                        "window.SignatureEditor.insertLink(${safeUrl.toJsString()});",
-                        null,
-                    )
-                }
-                showLinkDialog = false
-                linkUrl = "https://"
-            },
-            onDismiss = {
-                showLinkDialog = false
-                linkUrl = "https://"
-            },
-        )
-    }
-
-    if (showColorDialog) {
-        SignatureColorDialog(
-            onPick = { hex ->
-                runCommand("foreColor", hex)
-                showColorDialog = false
-            },
-            onDismiss = { showColorDialog = false },
-        )
-    }
-
-    if (showFontSizeDialog) {
-        SignatureFontSizeDialog(
-            onPick = { size ->
-                runCommand("fontSize", size)
-                showFontSizeDialog = false
-            },
-            onDismiss = { showFontSizeDialog = false },
-        )
-    }
-
-    if (showFontFamilyDialog) {
-        SignatureFontFamilyDialog(
-            onPick = { family ->
-                runCommand("fontName", family)
-                showFontFamilyDialog = false
-            },
-            onDismiss = { showFontFamilyDialog = false },
-        )
-    }
+    SignatureEditorDialogHost(
+        showLinkDialog = showLinkDialog,
+        linkUrl = linkUrl,
+        onLinkUrlChange = { linkUrl = it },
+        onLinkConfirm = {
+            insertLinkIntoEditor(webView, linkUrl)
+            showLinkDialog = false
+            linkUrl = "https://"
+        },
+        onLinkDismiss = {
+            showLinkDialog = false
+            linkUrl = "https://"
+        },
+        showColorDialog = showColorDialog,
+        onColorPick = { hex ->
+            runCommand("foreColor", hex)
+            showColorDialog = false
+        },
+        onColorDismiss = { showColorDialog = false },
+        showFontSizeDialog = showFontSizeDialog,
+        onFontSizePick = { size ->
+            runCommand("fontSize", size)
+            showFontSizeDialog = false
+        },
+        onFontSizeDismiss = { showFontSizeDialog = false },
+        showFontFamilyDialog = showFontFamilyDialog,
+        onFontFamilyPick = { family ->
+            runCommand("fontName", family)
+            showFontFamilyDialog = false
+        },
+        onFontFamilyDismiss = { showFontFamilyDialog = false },
+    )
 
     DisposableEffect(Unit) {
         onDispose {
@@ -225,6 +242,127 @@ fun SignatureHtmlEditor(
             webView?.evaluateJavascript("window.SignatureEditor && window.SignatureEditor.flush();", null)
             webView?.destroy()
             webView = null
+        }
+    }
+}
+
+@Composable
+private fun ImageInsertStatusBanner(status: ImageInsertStatus) {
+    when (status) {
+        ImageInsertStatus.Idle -> Unit
+
+        ImageInsertStatus.Loading -> {
+            TextBodySmall(
+                text = stringResource(R.string.signature_editor_image_uploading),
+                color = BoltTheme.colors.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(horizontal = BoltTheme.spacings.double)
+                    .testTag("signature_editor_image_status"),
+            )
+        }
+
+        is ImageInsertStatus.Error -> {
+            TextBodySmall(
+                text = status.message,
+                color = BoltTheme.colors.error,
+                modifier = Modifier
+                    .padding(horizontal = BoltTheme.spacings.double)
+                    .testTag("signature_editor_image_status"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignatureEditorDialogHost(
+    showLinkDialog: Boolean,
+    linkUrl: String,
+    onLinkUrlChange: (String) -> Unit,
+    onLinkConfirm: () -> Unit,
+    onLinkDismiss: () -> Unit,
+    showColorDialog: Boolean,
+    onColorPick: (String) -> Unit,
+    onColorDismiss: () -> Unit,
+    showFontSizeDialog: Boolean,
+    onFontSizePick: (String) -> Unit,
+    onFontSizeDismiss: () -> Unit,
+    showFontFamilyDialog: Boolean,
+    onFontFamilyPick: (String) -> Unit,
+    onFontFamilyDismiss: () -> Unit,
+) {
+    if (showLinkDialog) {
+        SignatureLinkDialog(
+            linkUrl = linkUrl,
+            onLinkUrlChange = onLinkUrlChange,
+            onConfirm = onLinkConfirm,
+            onDismiss = onLinkDismiss,
+        )
+    }
+    if (showColorDialog) {
+        SignatureColorDialog(onPick = onColorPick, onDismiss = onColorDismiss)
+    }
+    if (showFontSizeDialog) {
+        SignatureFontSizeDialog(onPick = onFontSizePick, onDismiss = onFontSizeDismiss)
+    }
+    if (showFontFamilyDialog) {
+        SignatureFontFamilyDialog(onPick = onFontFamilyPick, onDismiss = onFontFamilyDismiss)
+    }
+}
+
+private fun insertLinkIntoEditor(webView: SignatureEditorWebView?, linkUrl: String) {
+    val safeUrl = linkUrl.trim()
+    if (
+        !safeUrl.startsWith("https://") &&
+        !safeUrl.startsWith("http://") &&
+        !safeUrl.startsWith("mailto:")
+    ) {
+        return
+    }
+    webView?.finishActiveActionMode()
+    webView?.requestFocus()
+    webView?.evaluateJavascript(
+        "window.SignatureEditor.insertLink(${safeUrl.toJsString()});",
+        null,
+    )
+}
+
+private fun insertPickedImage(
+    scope: CoroutineScope,
+    context: android.content.Context,
+    uri: android.net.Uri,
+    imageHost: SignatureImageHostClient,
+    webViewProvider: () -> SignatureEditorWebView?,
+    onStatus: (ImageInsertStatus) -> Unit,
+) {
+    val target = webViewProvider()
+    onStatus(ImageInsertStatus.Loading)
+    scope.launch {
+        val publicUrl = withContext(Dispatchers.IO) {
+            runCatching { uri.toHostedSignatureImageUrl(context, imageHost) }.getOrNull()
+        }
+        if (publicUrl == null) {
+            onStatus(
+                ImageInsertStatus.Error(
+                    context.getString(R.string.signature_editor_image_insert_failed),
+                ),
+            )
+            return@launch
+        }
+        val editor = target ?: webViewProvider()
+        if (editor == null) {
+            onStatus(
+                ImageInsertStatus.Error(
+                    context.getString(R.string.signature_editor_image_insert_failed),
+                ),
+            )
+            return@launch
+        }
+        editor.finishActiveActionMode()
+        editor.requestFocus()
+        editor.evaluateJavascript(
+            "window.SignatureEditor.insertImage(${publicUrl.toJsString()});",
+        ) {
+            onStatus(ImageInsertStatus.Idle)
         }
     }
 }
@@ -269,7 +407,7 @@ private fun createSignatureEditorWebView(
     context: android.content.Context,
     initialHtml: String,
     onHtmlChange: (String) -> Unit,
-): WebView {
+): SignatureEditorWebView {
     return SignatureEditorWebViewFactory.create(
         context = context,
         initialHtml = initialHtml,
@@ -279,6 +417,8 @@ private fun createSignatureEditorWebView(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
+        isFocusable = true
+        isFocusableInTouchMode = true
     }
 }
 
@@ -289,19 +429,22 @@ private fun createSignatureEditorWebView(
 private fun android.net.Uri.toHostedSignatureImageUrl(
     context: android.content.Context,
     hostClient: SignatureImageHostClient,
-): String? {
-    return try {
-        context.contentResolver.openInputStream(this)?.use { input ->
-            val bytes = input.readBytes()
-            val mime = context.contentResolver.getType(this)
-            val webp = SignatureInlineImages.encodeToWebp(bytes, mime) ?: return null
-            runCatching { hostClient.uploadWebp(webp) }.getOrElse {
-                SignatureInlineImages.encodeBytes(bytes, mime)
-            }
-        }
-    } catch (_: Exception) {
-        null
+): String {
+    val bytes = context.contentResolver.openInputStream(this)?.use { it.readBytes() }
+        ?: error("could not read image")
+    val mime = context.contentResolver.getType(this)
+    val webp = SignatureInlineImages.encodeToWebp(bytes, mime)
+        ?: error("could not encode image as WebP under 256 KiB")
+    return runCatching { hostClient.uploadWebp(webp) }.getOrElse {
+        SignatureInlineImages.encodeBytes(bytes, mime)
+            ?: throw it
     }
+}
+
+private sealed interface ImageInsertStatus {
+    data object Idle : ImageInsertStatus
+    data object Loading : ImageInsertStatus
+    data class Error(val message: String) : ImageInsertStatus
 }
 
 private const val EDITOR_HEIGHT_DP = 240

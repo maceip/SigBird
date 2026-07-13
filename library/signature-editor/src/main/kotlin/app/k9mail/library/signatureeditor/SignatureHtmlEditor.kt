@@ -338,17 +338,8 @@ private fun insertPickedImage(
                 SignatureInlineImages.encodeToWebp(bytes, context.contentResolver.getType(uri))
             }.getOrNull()
         }
-        if (webp == null) {
-            onStatus(
-                ImageInsertStatus.Error(
-                    context.getString(R.string.signature_editor_image_insert_failed),
-                ),
-            )
-            return@launch
-        }
-
         val editor = webViewProvider()
-        if (editor == null) {
+        if (webp == null || editor == null) {
             onStatus(
                 ImageInsertStatus.Error(
                     context.getString(R.string.signature_editor_image_insert_failed),
@@ -369,28 +360,20 @@ private fun insertPickedImage(
         val publicUrl = withContext(Dispatchers.IO) {
             runCatching { imageHost.uploadWebp(webp) }.getOrNull()
         }
-        if (publicUrl != null) {
-            val currentEditor = webViewProvider()
-            if (currentEditor != null) {
-                currentEditor.evaluateJavascript(
-                    "window.SignatureEditor.swapImageSrc(${sigId.toJsString()}, ${publicUrl.toJsString()});",
-                    null,
-                )
-            } else {
-                onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, publicUrl))
-            }
-        } else {
-            val currentEditor = webViewProvider()
-            if (currentEditor != null) {
-                currentEditor.evaluateJavascript(
-                    "window.SignatureEditor.commitPendingImage(${sigId.toJsString()});",
-                    null,
-                )
-            } else {
-                onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, dataUri))
-            }
-        }
+
         // Hosted swap is an optimization — the data URI stays if the upload failed.
+        val currentEditor = webViewProvider()
+        if (currentEditor != null) {
+            val call = if (publicUrl != null) {
+                "window.SignatureEditor.swapImageSrc(${sigId.toJsString()}, ${publicUrl.toJsString()});"
+            } else {
+                "window.SignatureEditor.commitPendingImage(${sigId.toJsString()});"
+            }
+            currentEditor.evaluateJavascript(call, null)
+        } else {
+            val resolvedSrc = publicUrl ?: dataUri
+            onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, resolvedSrc))
+        }
         onStatus(ImageInsertStatus.Idle)
     }
 }

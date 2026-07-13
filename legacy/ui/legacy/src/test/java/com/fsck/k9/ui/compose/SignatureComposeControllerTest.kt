@@ -22,7 +22,9 @@ class SignatureComposeControllerTest : K9RobolectricTest() {
 
     @Before
     fun setUp() {
-        activityController = Robolectric.buildActivity(AppCompatActivity::class.java).setup()
+        // .create() (not .setup()): setup() runs postCreate, where AppCompat builds its
+        // subdecor before the test can install an AppCompat theme.
+        activityController = Robolectric.buildActivity(AppCompatActivity::class.java).create()
         activity = activityController.get()
         activity.setTheme(R.style.Theme_Legacy_Test)
         activity.setContentView(R.layout.message_compose_content)

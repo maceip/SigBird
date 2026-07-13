@@ -2,15 +2,18 @@ package com.fsck.k9
 
 import android.app.Application
 import androidx.compose.runtime.Composable
+import app.k9mail.core.android.common.provider.NotificationIconResourceProvider
 import app.k9mail.feature.telemetry.telemetryModule
 import app.k9mail.legacy.di.DI
 import com.fsck.k9.contacts.ContactPictureLoader
+import com.fsck.k9.ui.R
 import kotlinx.coroutines.flow.emptyFlow
 import net.thunderbird.core.android.account.AccountDefaultsProvider
 import net.thunderbird.core.android.account.LegacyAccountManager
 import net.thunderbird.core.android.preferences.TestStoragePersister
 import net.thunderbird.core.common.appConfig.PlatformConfigProvider
 import net.thunderbird.core.common.inject.factoryListOf
+import net.thunderbird.core.common.mail.html.HtmlSettings
 import net.thunderbird.core.featureflag.FeatureFlagProvider
 import net.thunderbird.core.featureflag.InMemoryFeatureFlagProvider
 import net.thunderbird.core.logging.LogLevel
@@ -25,9 +28,13 @@ import net.thunderbird.core.logging.testing.TestLogLevelManager
 import net.thunderbird.core.logging.testing.TestLogger
 import net.thunderbird.core.preference.storage.StoragePersister
 import net.thunderbird.core.ui.theme.api.FeatureThemeProvider
+import net.thunderbird.core.ui.theme.api.ThemeProvider
+import net.thunderbird.feature.mail.message.composer.html.MessageComposerHtmlSettingsProvider
+import net.thunderbird.feature.mail.message.list.LocalMessageUidPrefixProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssClassNameProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssStyleProvider
 import net.thunderbird.feature.mail.message.reader.api.css.CssVariableNameProvider
+import net.thunderbird.feature.mail.message.reader.api.html.MessageReaderHtmlSettingsProvider
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -94,7 +101,21 @@ val testModule = module {
     single<CssVariableNameProvider> { mock() }
     single<CssClassNameProvider> { mock() }
     factoryListOf<CssStyleProvider>()
+    factoryListOf<CssStyleProvider.Factory>()
+    single<LocalMessageUidPrefixProvider> { FakeLocalMessageUidPrefixProvider() }
+    single<NotificationIconResourceProvider> { FakeNotificationIconResourceProvider() }
+    single<MessageReaderHtmlSettingsProvider> {
+        object : MessageReaderHtmlSettingsProvider {
+            override fun create() = HtmlSettings(useDarkMode = false, useFixedWidthFont = false)
+        }
+    }
+    single<MessageComposerHtmlSettingsProvider> {
+        object : MessageComposerHtmlSettingsProvider {
+            override fun create() = HtmlSettings(useDarkMode = false, useFixedWidthFont = false)
+        }
+    }
     single<FeatureThemeProvider> { FakeFeatureThemeProvider() }
+    single<ThemeProvider> { FakeThemeProvider() }
 }
 
 private class FakeFeatureThemeProvider : FeatureThemeProvider {
@@ -112,4 +133,20 @@ private class FakeFeatureThemeProvider : FeatureThemeProvider {
 class FakePlatformConfigProvider : PlatformConfigProvider {
     override val isDebug: Boolean
         get() = true
+}
+
+private class FakeLocalMessageUidPrefixProvider : LocalMessageUidPrefixProvider {
+    override fun get(): String = "FAKE"
+}
+
+private class FakeNotificationIconResourceProvider(
+    override val pushNotificationIcon: Int = 9999,
+) : NotificationIconResourceProvider
+
+private class FakeThemeProvider : ThemeProvider {
+    override val appThemeResourceId: Int = R.style.Theme_Legacy_Test
+    override val appLightThemeResourceId: Int = R.style.Theme_Legacy_Test
+    override val appDarkThemeResourceId: Int = R.style.Theme_Legacy_Test
+    override val dialogThemeResourceId: Int = R.style.Theme_Legacy_Test
+    override val translucentDialogThemeResourceId: Int = R.style.Theme_Legacy_Test
 }

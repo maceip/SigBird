@@ -7,17 +7,28 @@ import app.k9mail.autodiscovery.api.ImapServerSettings
 import app.k9mail.autodiscovery.api.SmtpServerSettings
 import app.k9mail.autodiscovery.demo.DemoServerSettings
 import app.k9mail.feature.account.setup.domain.DomainContract
+import java.net.SocketTimeoutException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.withTimeoutOrNull
 import net.thunderbird.core.common.mail.toUserEmailAddress
 import net.thunderbird.core.common.oauth.OAuthConfigurationProvider
 
 internal class GetAutoDiscovery(
     private val service: AutoDiscoveryService,
     private val oauthProvider: OAuthConfigurationProvider,
+    private val timeout: Duration = DISCOVERY_TIMEOUT,
 ) : DomainContract.UseCase.GetAutoDiscovery {
     override suspend fun execute(emailAddress: String): AutoDiscoveryResult {
         val email = emailAddress.toUserEmailAddress()
 
-        val result = service.discover(email)
+        // Individual discovery attempts can stall for a very long time, e.g. when DNS queries are
+        // silently dropped by the network. Cap the total lookup time so the UI can always recover.
+        val result = withTimeoutOrNull(timeout) {
+            service.discover(email)
+        } ?: AutoDiscoveryResult.NetworkError(
+            SocketTimeoutException("Auto-discovery did not complete within $timeout"),
+        )
 
         return if (result is AutoDiscoveryResult.Settings) {
             if (result.incomingServerSettings is DemoServerSettings) {
@@ -77,5 +88,9 @@ internal class GetAutoDiscovery(
 
     private fun isOAuthSupportedFor(hostname: String): Boolean {
         return oauthProvider.getConfiguration(hostname) != null
+    }
+
+    companion object {
+        private val DISCOVERY_TIMEOUT = 30.seconds
     }
 }

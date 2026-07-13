@@ -66,6 +66,7 @@ dependencies {
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.lifecycle.process)
+    implementation(libs.minidns.client)
 
     testImplementation(projects.feature.account.fake)
     testImplementation(projects.core.testing)

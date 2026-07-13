@@ -11,6 +11,8 @@ import app.k9mail.autodiscovery.api.SmtpServerSettings
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isInstanceOf
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import net.thunderbird.core.common.mail.EmailAddress
 import net.thunderbird.core.common.net.toHostname
@@ -90,6 +92,19 @@ class GetAutoDiscoveryTest {
     }
 
     @Test
+    fun `should return NetworkError result when discovery does not finish within timeout`() = runTest {
+        val useCase = GetAutoDiscovery(
+            service = HangingAutoDiscoveryService(),
+            oauthProvider = FakeOAuthConfigurationProvider(),
+            timeout = 30.seconds,
+        )
+
+        val result = useCase.execute("user@example.com")
+
+        assertThat(result).isInstanceOf<AutoDiscoveryResult.NetworkError>()
+    }
+
+    @Test
     fun `should check for oauth support and return when supported`() = runTest {
         val useCase = GetAutoDiscovery(
             service = FakeAutoDiscoveryService(SETTINGS_WITH_OAUTH),
@@ -130,6 +145,12 @@ class GetAutoDiscoveryTest {
         private val answer: AutoDiscoveryResult = AutoDiscoveryResult.NoUsableSettingsFound,
     ) : AutoDiscoveryService {
         override suspend fun discover(email: EmailAddress): AutoDiscoveryResult = answer
+    }
+
+    private class HangingAutoDiscoveryService : AutoDiscoveryService {
+        override suspend fun discover(email: EmailAddress): AutoDiscoveryResult {
+            awaitCancellation()
+        }
     }
 
     private class FakeOAuthConfigurationProvider(

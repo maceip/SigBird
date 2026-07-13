@@ -372,7 +372,7 @@ private fun insertPickedImage(
             currentEditor.evaluateJavascript(call, null)
         } else {
             val resolvedSrc = publicUrl ?: dataUri
-            onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, resolvedSrc))
+            onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, resolvedSrc, dataUri))
         }
         onStatus(ImageInsertStatus.Idle)
     }
@@ -422,9 +422,20 @@ internal fun String?.decodeEvaluateJavascriptString(): String? {
     }.getOrNull()
 }
 
-internal fun resolvePendingSignatureImageHtml(html: String, sigId: String, resolvedSrc: String): String {
+internal fun resolvePendingSignatureImageHtml(
+    html: String,
+    sigId: String,
+    resolvedSrc: String,
+    pendingSrc: String? = null,
+): String {
     val match = PENDING_SIGNATURE_IMAGE_REGEX.findAll(html)
         .firstOrNull { it.groupValues[1] == sigId }
+        ?: pendingSrc?.let { pendingImageSrc ->
+            IMG_TAG_REGEX.findAll(html)
+                .firstOrNull { match ->
+                    IMG_SRC_VALUE_REGEX.find(match.value)?.groupValues?.get(1) == pendingImageSrc
+                }
+        }
         ?: return html
 
     val originalTag = match.value
@@ -467,8 +478,18 @@ private val PENDING_SIGNATURE_ID_ATTRIBUTE_REGEX = Regex(
     options = setOf(RegexOption.IGNORE_CASE),
 )
 
+private val IMG_TAG_REGEX = Regex(
+    pattern = """<img\b[^>]*>""",
+    options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+
 private val IMG_SRC_ATTRIBUTE_REGEX = Regex(
     pattern = "\\ssrc\\s*=\\s*\"[^\"]*\"",
+    options = setOf(RegexOption.IGNORE_CASE),
+)
+
+private val IMG_SRC_VALUE_REGEX = Regex(
+    pattern = "\\bsrc\\s*=\\s*\"([^\"]*)\"",
     options = setOf(RegexOption.IGNORE_CASE),
 )
 

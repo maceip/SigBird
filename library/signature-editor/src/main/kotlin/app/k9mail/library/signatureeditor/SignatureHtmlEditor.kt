@@ -22,12 +22,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.thunderbird.components.ui.bolt.atom.DividerHorizontal
@@ -55,6 +57,7 @@ fun SignatureHtmlEditor(
     bringIntoViewRequester: BringIntoViewRequester? = null,
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<SignatureEditorWebView?>(null) }
     var showLinkDialog by remember { mutableStateOf(false) }
@@ -63,6 +66,8 @@ fun SignatureHtmlEditor(
     var showFontFamilyDialog by remember { mutableStateOf(false) }
     var linkUrl by remember { mutableStateOf("https://") }
     var imageInsertStatus by remember { mutableStateOf<ImageInsertStatus>(ImageInsertStatus.Idle) }
+    val localBringIntoView = remember { BringIntoViewRequester() }
+    val effectiveBringIntoView = bringIntoViewRequester ?: localBringIntoView
     val imageHost = remember {
         SignatureImageHostClient(
             baseUrl = BuildConfig.SIGNATURE_GATEWAY_BASE,
@@ -70,16 +75,21 @@ fun SignatureHtmlEditor(
         )
     }
 
+    // GetContent is more reliable than OpenDocument for one-shot reads across OEMs.
     val imagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
+        ActivityResultContracts.GetContent(),
     ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        if (uri == null) {
+            imageInsertStatus = ImageInsertStatus.Idle
+            return@rememberLauncherForActivityResult
+        }
         insertPickedImage(
             scope = scope,
             context = context,
             uri = uri,
             imageHost = imageHost,
             webViewProvider = { webView },
+            bringIntoViewRequester = effectiveBringIntoView,
             onStatus = { imageInsertStatus = it },
         )
     }
@@ -96,16 +106,10 @@ fun SignatureHtmlEditor(
         editor.evaluateJavascript(js, null)
     }
 
-    val relocationModifier = if (bringIntoViewRequester != null) {
-        Modifier.bringIntoViewRequester(bringIntoViewRequester)
-    } else {
-        Modifier
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(relocationModifier)
+            .bringIntoViewRequester(effectiveBringIntoView)
             .testTag("signature_html_editor"),
         verticalArrangement = Arrangement.spacedBy(BoltTheme.spacings.half),
     ) {
@@ -150,12 +154,10 @@ fun SignatureHtmlEditor(
                             ).also { created ->
                                 created.contentDescription = "signature_html_editor_webview"
                                 created.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                if (bringIntoViewRequester != null) {
-                                    created.setOnFocusChangeListener { _, hasFocus ->
-                                        if (hasFocus) {
-                                            scope.launch {
-                                                bringIntoViewRequester.bringIntoView()
-                                            }
+                                created.setOnFocusChangeListener { _, hasFocus ->
+                                    if (hasFocus) {
+                                        scope.launch {
+                                            effectiveBringIntoView.bringIntoView()
                                         }
                                     }
                                 }
@@ -169,6 +171,8 @@ fun SignatureHtmlEditor(
                         },
                     )
                 }
+
+                ImageInsertStatusBanner(status = imageInsertStatus)
 
                 DividerHorizontal(color = BoltTheme.colors.outlineVariant)
 
@@ -192,15 +196,14 @@ fun SignatureHtmlEditor(
                     },
                     onInsertImage = {
                         webView?.finishActiveActionMode()
-                        imagePicker.launch(
-                            arrayOf("image/png", "image/jpeg", "image/gif", "image/webp"),
-                        )
+                        // Dismiss IME so the picker result and status stay visible.
+                        focusManager.clearFocus(force = true)
+                        scope.launch { effectiveBringIntoView.bringIntoView() }
+                        imagePicker.launch("image/*")
                     },
                 )
             }
         }
-
-        ImageInsertStatusBanner(status = imageInsertStatus)
     }
 
     SignatureEditorDialogHost(
@@ -256,7 +259,25 @@ private fun ImageInsertStatusBanner(status: ImageInsertStatus) {
                 text = stringResource(R.string.signature_editor_image_uploading),
                 color = BoltTheme.colors.onSurfaceVariant,
                 modifier = Modifier
-                    .padding(horizontal = BoltTheme.spacings.double)
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = BoltTheme.spacings.default,
+                        vertical = BoltTheme.spacings.half,
+                    )
+                    .testTag("signature_editor_image_status"),
+            )
+        }
+
+        ImageInsertStatus.Success -> {
+            TextBodySmall(
+                text = stringResource(R.string.signature_editor_image_inserted),
+                color = BoltTheme.colors.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = BoltTheme.spacings.default,
+                        vertical = BoltTheme.spacings.half,
+                    )
                     .testTag("signature_editor_image_status"),
             )
         }
@@ -266,7 +287,11 @@ private fun ImageInsertStatusBanner(status: ImageInsertStatus) {
                 text = status.message,
                 color = BoltTheme.colors.error,
                 modifier = Modifier
-                    .padding(horizontal = BoltTheme.spacings.double)
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = BoltTheme.spacings.default,
+                        vertical = BoltTheme.spacings.half,
+                    )
                     .testTag("signature_editor_image_status"),
             )
         }
@@ -332,38 +357,55 @@ private fun insertPickedImage(
     uri: android.net.Uri,
     imageHost: SignatureImageHostClient,
     webViewProvider: () -> SignatureEditorWebView?,
+    bringIntoViewRequester: BringIntoViewRequester,
     onStatus: (ImageInsertStatus) -> Unit,
 ) {
-    val target = webViewProvider()
     onStatus(ImageInsertStatus.Loading)
     scope.launch {
-        val publicUrl = withContext(Dispatchers.IO) {
-            runCatching { uri.toHostedSignatureImageUrl(context, imageHost) }.getOrNull()
+        bringIntoViewRequester.bringIntoView()
+        val hostedResult = withContext(Dispatchers.IO) {
+            runCatching { uri.toHostedSignatureImageUrl(context, imageHost) }
         }
+        val publicUrl = hostedResult.getOrNull()
         if (publicUrl == null) {
+            val detail = hostedResult.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
             onStatus(
                 ImageInsertStatus.Error(
-                    context.getString(R.string.signature_editor_image_insert_failed),
+                    if (detail == null) {
+                        context.getString(R.string.signature_editor_image_insert_failed)
+                    } else {
+                        context.getString(R.string.signature_editor_image_insert_failed_detail, detail)
+                    },
                 ),
             )
+            bringIntoViewRequester.bringIntoView()
             return@launch
         }
-        val editor = target ?: webViewProvider()
+        // Wait briefly for the editor AndroidView to re-attach after the picker.
+        var editor = webViewProvider()
+        if (editor == null) {
+            delay(WEBVIEW_REATTACH_WAIT_MS)
+            editor = webViewProvider()
+        }
         if (editor == null) {
             onStatus(
                 ImageInsertStatus.Error(
                     context.getString(R.string.signature_editor_image_insert_failed),
                 ),
             )
+            bringIntoViewRequester.bringIntoView()
             return@launch
         }
         editor.finishActiveActionMode()
         editor.requestFocus()
         editor.evaluateJavascript(
             "window.SignatureEditor.insertImage(${publicUrl.toJsString()});",
-        ) {
-            onStatus(ImageInsertStatus.Idle)
-        }
+            null,
+        )
+        onStatus(ImageInsertStatus.Success)
+        bringIntoViewRequester.bringIntoView()
+        delay(IMAGE_STATUS_SUCCESS_MS)
+        onStatus(ImageInsertStatus.Idle)
     }
 }
 
@@ -444,10 +486,13 @@ private fun android.net.Uri.toHostedSignatureImageUrl(
 private sealed interface ImageInsertStatus {
     data object Idle : ImageInsertStatus
     data object Loading : ImageInsertStatus
+    data object Success : ImageInsertStatus
     data class Error(val message: String) : ImageInsertStatus
 }
 
-private const val EDITOR_HEIGHT_DP = 240
+private const val EDITOR_HEIGHT_DP = 180
+private const val WEBVIEW_REATTACH_WAIT_MS = 250L
+private const val IMAGE_STATUS_SUCCESS_MS = 2_500L
 
 @Suppress("MagicNumber")
 private val EDITOR_CANVAS_COLOR = ComposeColor(0xFFFFFFFF)

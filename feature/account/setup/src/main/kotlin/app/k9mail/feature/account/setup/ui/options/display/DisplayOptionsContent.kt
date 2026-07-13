@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
@@ -39,6 +41,7 @@ internal fun DisplayOptionsContent(
     modifier: Modifier = Modifier,
 ) {
     val resources = LocalResources.current
+    val signatureBringIntoView = remember { BringIntoViewRequester() }
 
     ResponsiveWidthContainer(
         modifier = modifier
@@ -96,6 +99,7 @@ internal fun DisplayOptionsContent(
                 SignatureHtmlEditor(
                     html = state.emailSignature.value,
                     onHtmlChange = { onEvent(Event.OnEmailSignatureChanged(it)) },
+                    bringIntoViewRequester = signatureBringIntoView,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("account_setup_display_options_signature_input"),

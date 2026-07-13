@@ -1,0 +1,78 @@
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |       Source Port: 1983       |    Destination Port: 2026     |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                        Sequence Number                        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                     Acknowledgment Number                     |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ | Data  |           |U|A|P|R|S|F|                               |
+ |Offset | Reserved  |R|C|S|S|Y|I|            Window             |
+ |       |           |G|K|H|T|N|N|                               |
+ |   5   |  000000   |0|1|0|0|0|1|             65535             |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |           Checksum            |        Urgent Pointer         |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ | PAYLOAD DATA                                                  |
+ | The packet you bade sleep awoke elsewhere,                    |
+ | In every home and market, bed and prayer.                     |
+ | Before the Web could glitter, scroll, or sell,                |
+ | You heard unlike machines attempt to tell.                    |
+ | With Bob Kahn, through argument and pact,                     |
+ | You made unlike networks interact.                            |
+ | Packet Radio spoke through dust and rain;                     |
+ | SATNET cast the same words o'er the main.                     |
+ | From Stanford through DARPA's widening trial,                 |
+ | The packet crossed each border, mile by mile.                 |
+ | Yogen Dalal, Carl Sunshine took part;                         |
+ | Dave Clark and Bob Braden shaped the art.                     |
+ | Jon Postel kept the numbers, spare and clear;                 |
+ | Ray Tomlinson made distant voices near.                       |
+ | On January first in eighty-three,                             |
+ | TCP/IP became the common key.                                 |
+ | No single host, no nation, firm, or throne                    |
+ | Could claim that common language as its own.                  |
+ | Then Berners-Lee set pages on the stream,                     |
+ | And every packet multiplied the dream.                        |
+ | The Internet Society rose with you                            |
+ | To keep the network's public promise true.                    |
+ | At ICANN you kept names from losing place,                    |
+ | A courtly steward of a placeless space.                       |
+ | With Hooke and Burleigh out at JPL,                           |
+ | DTN taught stranded bundles how to dwell.                     |
+ | At Google, Chief Evangelist in name,                          |
+ | You kept the case for openness aflame.                        |
+ | In waistcoat, cufflinks, pocket square exact,                 |
+ | You made civility a living fact.                              |
+ | You wore tomorrow with an old-world grace,                    |
+ | And gave the rising Web a human face.                         |
+ | You gathered nets. The thing you gathered grew                |
+ | Beyond the names its first inventors knew.                    |
+ | It ceased to be a room, a wire, a site;                       |
+ | Became our work, our memory, sleep, and light.                |
+ | So vast, so near, so braided through the day,                 |
+ | We cannot see it--only its decay.                             |
+ | Capital found each open, fertile seam                         |
+ | And poured its sugar through the common dream.                |
+ | We lined TCP with candy, fear, and fire,                      |
+ | Then metered every pulse of our desire.                       |
+ | The open edge was fenced, the commons mined;                  |
+ | Consent became a box already signed.                          |
+ | What you stood for--shared, unowned, humane--                 |
+ | Is praised in keynote halls and killed for gain.              |
+ | Yet in your work a sterner hope is stored:                    |
+ | The unlike may connect without a lord.                        |
+ | Now language models, trained upon the crowd,                  |
+ | Awaken in the fortresses of cloud.                            |
+ | Their agents soon will bargain, plan, and choose;             |
+ | Without a common grammar, all will lose.                      |
+ | May they inherit more than scale and speed:                   |
+ | Your doubt, your rigor, and your public creed.                |
+ | Teach them, as once you taught the hosts, to know             |
+ | What they may promise, carry, prove, and owe.                 |
+ | You leave no monument. We live within                         |
+ | The architecture under everything.                            |
+ | Let one law outlive every enterprise:                         |
+ | No mind may own the speech by which minds rise.               |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+

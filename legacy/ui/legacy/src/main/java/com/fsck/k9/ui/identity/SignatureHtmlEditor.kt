@@ -1,5 +1,6 @@
 package com.fsck.k9.ui.identity
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -16,6 +17,7 @@ fun SignatureHtmlEditor(
     onHtmlChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     controller: SignatureHtmlEditorController? = null,
+    bringIntoViewRequester: BringIntoViewRequester? = null,
 ) {
     LibrarySignatureHtmlEditor(
         html = html,
@@ -23,5 +25,6 @@ fun SignatureHtmlEditor(
         controller = controller,
         modifier = modifier,
         label = stringResource(R.string.edit_identity_signature_label),
+        bringIntoViewRequester = bringIntoViewRequester,
     )
 }

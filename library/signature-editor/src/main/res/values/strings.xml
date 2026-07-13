@@ -21,5 +21,7 @@
     <string name="signature_editor_align_right">Align right</string>
     <string name="signature_editor_insert_link">Insert link</string>
     <string name="signature_editor_insert_image">Insert image</string>
+    <string name="signature_editor_image_uploading">Uploading signature image…</string>
+    <string name="signature_editor_image_insert_failed">Could not insert image. Try a smaller PNG or JPEG.</string>
     <string name="signature_editor_horizontal_rule">Horizontal line</string>
 </resources>

@@ -19,7 +19,8 @@ class SignatureEditorWebViewFactoryTest {
         val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
 
         assertThat(document).contains("command: function")
-        assertThat(document).contains("document.execCommand")
+        assertThat(document).contains("ensureEditableSelection")
+        assertThat(document).contains("document.createElement('img')")
         assertThat(document).contains("emitDebounced")
         assertThat(document).contains("flush:")
     }

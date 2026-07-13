@@ -57,13 +57,13 @@ App                     Gateway                         Tamayo packages / issuer
 
 #### HTTP surface (v1)
 
-| Method |               Path                |                                                    Purpose                                                     |
-|--------|-----------------------------------|----------------------------------------------------------------------------------------------------------------|
-| `GET`  | `/healthz`                        | Liveness                                                                                                       |
-| `GET`  | `/v1/issuer`                      | Public issuer info (algorithm, key version, public keys, origin)                                               |
-| `POST` | `/v1/sessions`                    | Create upload session; returns `session_id`, `presentation_nonce_b64`, origin                                  |
-| `POST` | `/v1/sessions/{id}/assisted-mint` | **DevX only**: server-side blind loop over a **client-supplied holder public key**. Never returns a seed.      |
-| `POST` | `/v1/uploads`                     | Present holder PoP + content SHA-256 + byte length; spend the session nonce; return S3 PUT URL + public URL    |
+| Method |               Path                |                                                   Purpose                                                   |
+|--------|-----------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `GET`  | `/healthz`                        | Liveness                                                                                                    |
+| `GET`  | `/v1/issuer`                      | Public issuer info (algorithm, key version, public keys, origin)                                            |
+| `POST` | `/v1/sessions`                    | Create upload session; returns `session_id`, `presentation_nonce_b64`, origin                               |
+| `POST` | `/v1/sessions/{id}/assisted-mint` | **DevX only**: server-side blind loop over a **client-supplied holder public key**. Never returns a seed.   |
+| `POST` | `/v1/uploads`                     | Present holder PoP + content SHA-256 + byte length; spend the session nonce; return S3 PUT URL + public URL |
 
 #### Upload constraints (enforced at presign + PUT)
 

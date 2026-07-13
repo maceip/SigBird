@@ -61,6 +61,10 @@
 -dontwarn org.apache.http.client.methods.CloseableHttpResponse
 -dontwarn org.slf4j.impl.StaticLoggerBinder
 
+# net.i2p.crypto:eddsa (signature-editor holder keys) references JDK-internal
+# sun.security.x509.X509Key on a fallback path that never executes on Android.
+-dontwarn sun.security.x509.X509Key
+
 -keep,allowshrinking class com.tokenautocomplete.TokenCompleteTextView
 
 # Moshi's EnumJsonAdapter uses Class.getField() to map JSON strings to enum constants.

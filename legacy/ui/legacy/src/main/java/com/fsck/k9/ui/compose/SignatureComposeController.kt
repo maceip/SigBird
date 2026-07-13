@@ -6,11 +6,14 @@ import android.os.Looper
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import app.k9mail.legacy.di.DI
+import app.k9mail.library.signatureeditor.SignatureImageIntercepts
 import com.fsck.k9.helper.toCrLf
 import com.fsck.k9.helper.toLf
 import com.fsck.k9.message.html.SignatureContent
@@ -133,11 +136,17 @@ class SignatureComposeController(
             activeEdit.visibility = View.GONE
             activeHtml.visibility = View.VISIBLE
             val fragment = SignatureContent.toHtmlFragment(signature)
-            activeHtml.displayHtmlContentWithInlineAttachments(
+            // Load directly instead of displayHtmlContentWithInlineAttachments():
+            // that helper installs K9WebViewClient, which would replace the
+            // hosted-image intercept configured in configurePreview().
+            activeHtml.loadDataWithBaseURL(
+                "about:blank",
                 displayHtml.wrapMessageContent(fragment),
-                null,
+                "text/html",
+                "utf-8",
                 null,
             )
+            activeHtml.resumeTimers()
         } else {
             activeHtml.visibility = View.GONE
             activeEdit.visibility = View.VISIBLE
@@ -157,9 +166,20 @@ class SignatureComposeController(
 
     private fun configurePreview(webView: MessageWebView) {
         webView.configure(webViewConfigProvider.createForMessageCompose())
+        // configure() blocks network loads, which also suppresses shouldInterceptRequest —
+        // hosted signature images would silently never render. Unblock and let the
+        // intercept below answer every request itself (allow-listed images only).
+        webView.blockNetworkData(false)
         webView.setWebViewClient(
             object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = true
+
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    return SignatureImageIntercepts.interceptOrBlock(request?.url?.toString())
+                }
             },
         )
         webView.contentDescription = "compose_signature_preview"

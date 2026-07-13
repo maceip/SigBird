@@ -118,10 +118,41 @@ internal class SignatureEditorWebView(
     }
 }
 
+/**
+ * Shared request handling for WebViews that render signature HTML: allow-listed
+ * hosted signature images are fetched by the app, every other network request is
+ * answered with an empty response. Callers must leave blockNetworkLoads /
+ * blockNetworkImage off — those flags suppress the intercept path entirely.
+ */
+object SignatureImageIntercepts {
+    private val hostedImageHttpClient: okhttp3.OkHttpClient by lazy { okhttp3.OkHttpClient() }
+
+    fun blockedResponse(): WebResourceResponse {
+        return WebResourceResponse("text/plain", null, ByteArrayInputStream(ByteArray(0)))
+    }
+
+    fun fetchAllowlistedHostedImage(url: String): WebResourceResponse? {
+        if (!SignatureImageHostClient.isAllowedHostedImageUrl(url)) {
+            return null
+        }
+        return runCatching {
+            hostedImageHttpClient.newCall(
+                okhttp3.Request.Builder().url(url).get().build(),
+            )
+                .execute()
+                .toHostedImageWebResourceResponse()
+        }.getOrNull()
+    }
+
+    /** Hosted image if allow-listed, otherwise an empty response. */
+    fun interceptOrBlock(url: String?): WebResourceResponse {
+        if (url == null) return blockedResponse()
+        return fetchAllowlistedHostedImage(url) ?: blockedResponse()
+    }
+}
+
 internal object SignatureEditorWebViewFactory {
     private const val CONTENT_CHANGE_DEBOUNCE_MS = 400L
-
-    private val hostedImageHttpClient: okhttp3.OkHttpClient by lazy { okhttp3.OkHttpClient() }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun create(
@@ -157,10 +188,7 @@ internal object SignatureEditorWebViewFactory {
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): WebResourceResponse? {
-                    val url = request?.url?.toString() ?: return blockedResponse()
-                    // Allow-listed hosted signature images are fetched by the app;
-                    // every other network request is answered with an empty body.
-                    return fetchAllowlistedHostedImage(url) ?: blockedResponse()
+                    return SignatureImageIntercepts.interceptOrBlock(request?.url?.toString())
                 }
             }
             val mainHandler = Handler(Looper.getMainLooper())
@@ -182,23 +210,6 @@ internal object SignatureEditorWebViewFactory {
                 null,
             )
         }
-    }
-
-    private fun blockedResponse(): WebResourceResponse {
-        return WebResourceResponse("text/plain", null, ByteArrayInputStream(ByteArray(0)))
-    }
-
-    private fun fetchAllowlistedHostedImage(url: String): WebResourceResponse? {
-        if (!SignatureImageHostClient.isAllowedHostedImageUrl(url)) {
-            return null
-        }
-        return runCatching {
-            hostedImageHttpClient.newCall(
-                okhttp3.Request.Builder().url(url).get().build(),
-            )
-                .execute()
-                .toHostedImageWebResourceResponse()
-        }.getOrNull()
     }
 
     @Suppress("LongMethod")

@@ -37,6 +37,29 @@ class SignatureHtmlEditorTest {
     }
 
     @Test
+    fun `resolvePendingSignatureImageHtmlWithFallback uses inserted html when current state is stale`() {
+        // Arrange
+        val pendingSrc = "data:image/webp;base64,UklGRiQAAABXRUJQVlA4WAoAAAAQAAAA"
+        val currentHtml = "<p>Hello</p>"
+        val fallbackHtml = """<p>Hello<img src="$pendingSrc" alt="" data-sig-id="sig-123"></p>"""
+        val publicUrl = "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp"
+
+        // Act
+        val result = resolvePendingSignatureImageHtmlWithFallback(
+            currentHtml = currentHtml,
+            fallbackHtml = fallbackHtml,
+            sigId = "sig-123",
+            resolvedSrc = publicUrl,
+            pendingSrc = pendingSrc,
+        )
+
+        // Assert
+        assertThat(result).contains(publicUrl)
+        assertThat(result).doesNotContain(pendingSrc)
+        assertThat(result).doesNotContain("data-sig-id")
+    }
+
+    @Test
     fun `resolvePendingSignatureImageHtml leaves unrelated html unchanged`() {
         // Arrange
         val html = """<p>Hello<img alt="" data-sig-id="sig-123"></p>"""

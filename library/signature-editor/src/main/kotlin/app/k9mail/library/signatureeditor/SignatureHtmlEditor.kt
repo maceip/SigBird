@@ -28,10 +28,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.util.UUID
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import net.thunderbird.components.ui.bolt.atom.DividerHorizontal
 import net.thunderbird.components.ui.bolt.atom.Surface
@@ -351,9 +353,10 @@ private fun insertPickedImage(
         val sigId = UUID.randomUUID().toString()
         val dataUri = SignatureInlineImages.toDataUri(webp)
         editor.finishActiveActionMode()
-        editor.evaluateJavascript(
-            "window.SignatureEditor.insertImage(${dataUri.toJsString()}, ${sigId.toJsString()});",
-            null,
+        val pendingHtml = insertPendingSignatureImageAndCaptureHtml(
+            editor = editor,
+            dataUri = dataUri,
+            sigId = sigId,
         )
 
         onStatus(ImageInsertStatus.Loading)
@@ -372,9 +375,38 @@ private fun insertPickedImage(
             currentEditor.evaluateJavascript(call, null)
         } else {
             val resolvedSrc = publicUrl ?: dataUri
-            onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, resolvedSrc, dataUri))
+            onHtmlChange(
+                resolvePendingSignatureImageHtmlWithFallback(
+                    currentHtml = currentHtmlProvider(),
+                    fallbackHtml = pendingHtml,
+                    sigId = sigId,
+                    resolvedSrc = resolvedSrc,
+                    pendingSrc = dataUri,
+                ),
+            )
         }
         onStatus(ImageInsertStatus.Idle)
+    }
+}
+
+private suspend fun insertPendingSignatureImageAndCaptureHtml(
+    editor: SignatureEditorWebView,
+    dataUri: String,
+    sigId: String,
+): String? {
+    return suspendCancellableCoroutine { continuation ->
+        editor.evaluateJavascript(
+            """
+            (function() {
+              window.SignatureEditor.insertImage(${dataUri.toJsString()}, ${sigId.toJsString()});
+              return window.SignatureEditor.getHtml();
+            })();
+            """.trimIndent(),
+        ) { serializedHtml ->
+            if (continuation.isActive) {
+                continuation.resume(serializedHtml.decodeEvaluateJavascriptString())
+            }
+        }
     }
 }
 
@@ -420,6 +452,26 @@ internal fun String?.decodeEvaluateJavascriptString(): String? {
     return runCatching {
         org.json.JSONTokener(this).nextValue() as? String
     }.getOrNull()
+}
+
+internal fun resolvePendingSignatureImageHtmlWithFallback(
+    currentHtml: String,
+    fallbackHtml: String?,
+    sigId: String,
+    resolvedSrc: String,
+    pendingSrc: String? = null,
+): String {
+    val resolvedCurrentHtml = resolvePendingSignatureImageHtml(currentHtml, sigId, resolvedSrc, pendingSrc)
+    if (resolvedCurrentHtml != currentHtml) return resolvedCurrentHtml
+
+    val candidateHtml = fallbackHtml ?: return currentHtml
+    val resolvedFallbackHtml = resolvePendingSignatureImageHtml(candidateHtml, sigId, resolvedSrc, pendingSrc)
+
+    return if (resolvedFallbackHtml != candidateHtml) {
+        resolvedFallbackHtml
+    } else {
+        currentHtml
+    }
 }
 
 internal fun resolvePendingSignatureImageHtml(

@@ -68,6 +68,9 @@ internal object SignatureInlineImages {
         return toDataUri("image/webp", webp)
     }
 
+    /** Data URI for already-encoded WebP bytes (instant in-editor preview). */
+    fun toDataUri(webpBytes: ByteArray): String = toDataUri("image/webp", webpBytes)
+
     /**
      * Re-encodes oversized data-URI images in HTML to WebP under the 256 KiB budget.
      */

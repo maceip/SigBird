@@ -19,10 +19,36 @@ class SignatureEditorWebViewFactoryTest {
         val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
 
         assertThat(document).contains("command: function")
-        assertThat(document).contains("ensureEditableSelection")
+        assertThat(document).contains("restoreSelection")
         assertThat(document).contains("document.createElement('img')")
         assertThat(document).contains("emitDebounced")
         assertThat(document).contains("flush:")
+    }
+
+    @Test
+    fun `buildEditorDocument preserves selection across toolbar taps`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
+
+        assertThat(document).contains("savedRange = range.cloneRange()")
+        assertThat(document).contains("addEventListener('selectionchange'")
+    }
+
+    @Test
+    fun `buildEditorDocument reports active format state to the bridge`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
+
+        assertThat(document).contains("queryCommandState('bold')")
+        assertThat(document).contains("queryCommandState('italic')")
+        assertThat(document).contains("queryCommandState('underline')")
+        assertThat(document).contains("onFormatStateChanged(bold, italic, underline)")
+    }
+
+    @Test
+    fun `buildEditorDocument supports background hosted-url swap`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
+
+        assertThat(document).contains("swapImageSrc: function(sigId, newSrc)")
+        assertThat(document).contains("data-sig-id")
     }
 
     @Test

@@ -282,7 +282,7 @@ internal object SignatureEditorWebViewFactory {
               function serializeHtml() {
                 var clone = editor.cloneNode(true);
                 clone.querySelectorAll('img[data-sig-id]').forEach(function(img) {
-                  img.removeAttribute('src');
+                  img.removeAttribute('data-sig-id');
                 });
                 return clone.innerHTML;
               }

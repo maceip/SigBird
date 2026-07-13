@@ -49,7 +49,8 @@ class SignatureEditorWebViewFactoryTest {
 
         assertThat(document).contains("swapImageSrc: function(sigId, newSrc)")
         assertThat(document).contains("commitPendingImage: function(sigId)")
-        assertThat(document).contains("img.removeAttribute('src')")
+        assertThat(document).contains("img.removeAttribute('data-sig-id')")
+        assertThat(document).doesNotContain("img.removeAttribute('src')")
         assertThat(document).contains("data-sig-id")
     }
 

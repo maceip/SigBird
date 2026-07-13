@@ -42,6 +42,22 @@ class SignatureStorageTest {
     }
 
     @Test
+    fun `sanitizeForStorage removes pending upload images`() {
+        val html = """
+            <div>
+              <img src="data:image/webp;base64,UklGRiQAAABXRUJQVlA4WAoAAAAQAAAA" data-sig-id="sig-123" alt="Pending">
+              <p>Jane Doe</p>
+            </div>
+        """.trimIndent()
+
+        val result = SignatureStorage.sanitizeForStorage(html).orEmpty()
+
+        assertThat(result).doesNotContain("data:image/webp;base64,")
+        assertThat(result).doesNotContain("data-sig-id")
+        assertThat(result).contains("Jane Doe")
+    }
+
+    @Test
     fun `sanitizeForStorage removes remote images and scripts`() {
         val html = """
             <div>

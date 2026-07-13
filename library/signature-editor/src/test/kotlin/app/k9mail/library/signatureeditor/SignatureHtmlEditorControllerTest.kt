@@ -50,6 +50,28 @@ class SignatureHtmlEditorControllerTest {
         assertThat(webView.lastScript).isEqualTo("(window.SignatureEditor && window.SignatureEditor.getHtml()) || null")
         assertThat(capturedHtml).isEqualTo(expectedHtml)
     }
+
+    @Test
+    fun `captureHtml prefers resolved state when webview still has pending upload placeholder`() {
+        // Arrange
+        val currentHtml = """<p>fresh<img src="https://tokens.public.computer/x.webp" alt=""></p>"""
+        val webView = FakeSignatureEditorWebView(
+            context = RuntimeEnvironment.getApplication(),
+            html = """<p>fresh<img data-sig-id="sig-123" alt=""></p>""",
+        )
+        val testSubject = SignatureHtmlEditorController().apply {
+            attachWebView(webView)
+        }
+        var capturedHtml: String? = null
+
+        // Act
+        testSubject.captureHtml(currentHtml) { html ->
+            capturedHtml = html
+        }
+
+        // Assert
+        assertThat(capturedHtml).isEqualTo(currentHtml)
+    }
 }
 
 private class FakeSignatureEditorWebView(

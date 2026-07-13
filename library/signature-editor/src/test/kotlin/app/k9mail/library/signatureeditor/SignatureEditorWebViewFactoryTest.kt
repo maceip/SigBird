@@ -48,6 +48,8 @@ class SignatureEditorWebViewFactoryTest {
         val document = SignatureEditorWebViewFactory.buildEditorDocument("<b>Hi</b>")
 
         assertThat(document).contains("swapImageSrc: function(sigId, newSrc)")
+        assertThat(document).contains("commitPendingImage: function(sigId)")
+        assertThat(document).contains("img.removeAttribute('src')")
         assertThat(document).contains("data-sig-id")
     }
 

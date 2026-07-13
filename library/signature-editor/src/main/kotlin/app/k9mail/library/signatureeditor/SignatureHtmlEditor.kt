@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +30,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.thunderbird.components.ui.bolt.atom.DividerHorizontal
@@ -60,6 +62,7 @@ fun SignatureHtmlEditor(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val latestHtml by rememberUpdatedState(html)
     var webView by remember { mutableStateOf<SignatureEditorWebView?>(null) }
     var showLinkDialog by remember { mutableStateOf(false) }
     var showFontSizeDialog by remember { mutableStateOf(false) }
@@ -78,11 +81,12 @@ fun SignatureHtmlEditor(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         insertPickedImage(
-            scope = scope,
             context = context,
             uri = uri,
             imageHost = imageHost,
             webViewProvider = { webView },
+            currentHtmlProvider = { latestHtml },
+            onHtmlChange = onHtmlChange,
             onStatus = { imageInsertStatus = it },
         )
     }
@@ -318,14 +322,15 @@ private fun insertLinkIntoEditor(webView: SignatureEditorWebView?, linkUrl: Stri
  * copy simply stays — the user already saw their image appear.
  */
 private fun insertPickedImage(
-    scope: CoroutineScope,
     context: android.content.Context,
     uri: android.net.Uri,
     imageHost: SignatureImageHostClient,
     webViewProvider: () -> SignatureEditorWebView?,
+    currentHtmlProvider: () -> String,
+    onHtmlChange: (String) -> Unit,
     onStatus: (ImageInsertStatus) -> Unit,
 ) {
-    scope.launch {
+    CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
         val webp = withContext(Dispatchers.IO) {
             runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -365,10 +370,25 @@ private fun insertPickedImage(
             runCatching { imageHost.uploadWebp(webp) }.getOrNull()
         }
         if (publicUrl != null) {
-            webViewProvider()?.evaluateJavascript(
-                "window.SignatureEditor.swapImageSrc(${sigId.toJsString()}, ${publicUrl.toJsString()});",
-                null,
-            )
+            val currentEditor = webViewProvider()
+            if (currentEditor != null) {
+                currentEditor.evaluateJavascript(
+                    "window.SignatureEditor.swapImageSrc(${sigId.toJsString()}, ${publicUrl.toJsString()});",
+                    null,
+                )
+            } else {
+                onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, publicUrl))
+            }
+        } else {
+            val currentEditor = webViewProvider()
+            if (currentEditor != null) {
+                currentEditor.evaluateJavascript(
+                    "window.SignatureEditor.commitPendingImage(${sigId.toJsString()});",
+                    null,
+                )
+            } else {
+                onHtmlChange(resolvePendingSignatureImageHtml(currentHtmlProvider(), sigId, dataUri))
+            }
         }
         // Hosted swap is an optimization — the data URI stays if the upload failed.
         onStatus(ImageInsertStatus.Idle)
@@ -388,7 +408,16 @@ class SignatureHtmlEditorController {
         currentWebView.evaluateJavascript(
             "(window.SignatureEditor && window.SignatureEditor.getHtml()) || null",
         ) { serializedHtml ->
-            onHtmlCaptured(serializedHtml.decodeEvaluateJavascriptString() ?: currentHtml)
+            val capturedHtml = serializedHtml.decodeEvaluateJavascriptString() ?: currentHtml
+            val htmlToPersist = if (
+                containsPendingSignatureUpload(capturedHtml) &&
+                !containsPendingSignatureUpload(currentHtml)
+            ) {
+                currentHtml
+            } else {
+                capturedHtml
+            }
+            onHtmlCaptured(htmlToPersist)
         }
     }
 
@@ -409,6 +438,56 @@ internal fun String?.decodeEvaluateJavascriptString(): String? {
         org.json.JSONTokener(this).nextValue() as? String
     }.getOrNull()
 }
+
+internal fun resolvePendingSignatureImageHtml(html: String, sigId: String, resolvedSrc: String): String {
+    val match = PENDING_SIGNATURE_IMAGE_REGEX.findAll(html)
+        .firstOrNull { it.groupValues[1] == sigId }
+        ?: return html
+
+    val originalTag = match.value
+    val tagWithoutMarker = PENDING_SIGNATURE_ID_ATTRIBUTE_REGEX.replace(originalTag, "")
+    val escapedSrc = resolvedSrc.escapeHtmlAttribute()
+    val updatedTag = if (IMG_SRC_ATTRIBUTE_REGEX.containsMatchIn(tagWithoutMarker)) {
+        IMG_SRC_ATTRIBUTE_REGEX.replace(tagWithoutMarker, """ src="$escapedSrc"""")
+    } else {
+        tagWithoutMarker.replace(">", """ src="$escapedSrc">""")
+    }
+
+    return html.substring(0, match.range.first) + updatedTag + html.substring(match.range.last + 1)
+}
+
+private fun containsPendingSignatureUpload(html: String): Boolean {
+    return "data-sig-id" in html
+}
+
+private fun String.escapeHtmlAttribute(): String {
+    return buildString {
+        for (char in this@escapeHtmlAttribute) {
+            when (char) {
+                '&' -> append("&amp;")
+                '"' -> append("&quot;")
+                '<' -> append("&lt;")
+                '>' -> append("&gt;")
+                else -> append(char)
+            }
+        }
+    }
+}
+
+private val PENDING_SIGNATURE_IMAGE_REGEX = Regex(
+    pattern = """<img\b[^>]*\bdata-sig-id\s*=\s*"([^"]+)"[^>]*>""",
+    options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+
+private val PENDING_SIGNATURE_ID_ATTRIBUTE_REGEX = Regex(
+    pattern = "\\sdata-sig-id\\s*=\\s*\"[^\"]*\"",
+    options = setOf(RegexOption.IGNORE_CASE),
+)
+
+private val IMG_SRC_ATTRIBUTE_REGEX = Regex(
+    pattern = "\\ssrc\\s*=\\s*\"[^\"]*\"",
+    options = setOf(RegexOption.IGNORE_CASE),
+)
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun createSignatureEditorWebView(

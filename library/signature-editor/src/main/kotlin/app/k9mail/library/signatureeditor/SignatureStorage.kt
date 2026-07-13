@@ -31,7 +31,7 @@ object SignatureStorage {
     fun sanitizeForStorage(signature: String?): String? = when {
         signature == null -> null
         signature.isBlank() -> signature
-        isHtml(signature) -> htmlSanitizer.sanitize(signature)
+        isHtml(signature) -> htmlSanitizer.sanitize(removePendingUploadImages(signature))
         else -> signature
     }
 
@@ -63,4 +63,13 @@ object SignatureStorage {
             signature
         }
     }
+
+    private fun removePendingUploadImages(html: String): String {
+        return PENDING_SIGNATURE_IMAGE_TAG_REGEX.replace(html, "")
+    }
 }
+
+private val PENDING_SIGNATURE_IMAGE_TAG_REGEX = Regex(
+    pattern = """<img\b[^>]*\bdata-sig-id\s*=\s*"[^"]+"[^>]*>""",
+    options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)

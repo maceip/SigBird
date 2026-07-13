@@ -268,9 +268,16 @@ internal object SignatureEditorWebViewFactory {
               // WebView selection before the command arrives. Remember the last real
               // selection inside the editor so commands act on what the user selected.
               var savedRange = null;
+              function serializeHtml() {
+                var clone = editor.cloneNode(true);
+                clone.querySelectorAll('img[data-sig-id]').forEach(function(img) {
+                  img.removeAttribute('src');
+                });
+                return clone.innerHTML;
+              }
               function emitNow() {
                 if (typeof AndroidSignatureEditor !== 'undefined') {
-                  AndroidSignatureEditor.onContentChanged(editor.innerHTML);
+                  AndroidSignatureEditor.onContentChanged(serializeHtml());
                 }
               }
               function emitDebounced() {
@@ -386,8 +393,17 @@ internal object SignatureEditorWebViewFactory {
                   emitNow();
                   return true;
                 },
+                commitPendingImage: function(sigId) {
+                  var img = editor.querySelector('img[data-sig-id="' + sigId + '"]');
+                  if (!img) {
+                    return false;
+                  }
+                  img.removeAttribute('data-sig-id');
+                  emitNow();
+                  return true;
+                },
                 getHtml: function() {
-                  return editor.innerHTML;
+                  return serializeHtml();
                 },
                 setHtml: function(html) {
                   editor.innerHTML = html;

@@ -16,7 +16,7 @@ android {
         applicationId = "com.fsck.k9"
         testApplicationId = "com.fsck.k9.tests"
 
-        versionCode = 39016
+        versionCode = 39017
         versionName = "22.0"
         versionNameSuffix = "a1"
 

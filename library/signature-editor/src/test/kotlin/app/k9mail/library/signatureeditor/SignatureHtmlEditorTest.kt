@@ -14,7 +14,11 @@ class SignatureHtmlEditorTest {
         val publicUrl = "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp"
 
         // Act
-        val result = resolvePendingSignatureImageHtml(html, "sig-123", publicUrl)
+        val result = resolvePendingSignatureImageHtml(
+            html = html,
+            sigId = "sig-123",
+            resolvedSrc = publicUrl,
+        )
 
         // Assert
         assertThat(result).contains(publicUrl)
@@ -29,7 +33,12 @@ class SignatureHtmlEditorTest {
         val publicUrl = "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp"
 
         // Act
-        val result = resolvePendingSignatureImageHtml(html, "sig-123", publicUrl, pendingSrc)
+        val result = resolvePendingSignatureImageHtml(
+            html = html,
+            sigId = "sig-123",
+            resolvedSrc = publicUrl,
+            pendingSrc = pendingSrc,
+        )
 
         // Assert
         assertThat(result).contains(publicUrl)
@@ -37,16 +46,16 @@ class SignatureHtmlEditorTest {
     }
 
     @Test
-    fun `resolvePendingSignatureImageHtmlWithFallback uses inserted html when current state is stale`() {
+    fun `resolvePendingSignatureImageHtml uses inserted html fallback when current state is stale`() {
         // Arrange
         val pendingSrc = "data:image/webp;base64,UklGRiQAAABXRUJQVlA4WAoAAAAQAAAA"
-        val currentHtml = "<p>Hello</p>"
+        val html = "<p>Hello</p>"
         val fallbackHtml = """<p>Hello<img src="$pendingSrc" alt="" data-sig-id="sig-123"></p>"""
         val publicUrl = "https://tokens.public.computer/v1/dev-get/sig/2026/07/abcd/obj.webp"
 
         // Act
-        val result = resolvePendingSignatureImageHtmlWithFallback(
-            currentHtml = currentHtml,
+        val result = resolvePendingSignatureImageHtml(
+            html = html,
             fallbackHtml = fallbackHtml,
             sigId = "sig-123",
             resolvedSrc = publicUrl,
@@ -65,7 +74,11 @@ class SignatureHtmlEditorTest {
         val html = """<p>Hello<img alt="" data-sig-id="sig-123"></p>"""
 
         // Act
-        val result = resolvePendingSignatureImageHtml(html, "sig-999", "https://tokens.public.computer/x.webp")
+        val result = resolvePendingSignatureImageHtml(
+            html = html,
+            sigId = "sig-999",
+            resolvedSrc = "https://tokens.public.computer/x.webp",
+        )
 
         // Assert
         assertThat(result).isEqualTo(html)

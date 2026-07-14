@@ -323,6 +323,7 @@ private fun insertLinkIntoEditor(webView: SignatureEditorWebView?, linkUrl: Stri
  * the src to the public URL when it succeeds. If the upload fails the local
  * copy simply stays — the user already saw their image appear.
  */
+@Suppress("LongMethod")
 private fun insertPickedImage(
     context: android.content.Context,
     uri: android.net.Uri,
@@ -353,11 +354,20 @@ private fun insertPickedImage(
         val sigId = UUID.randomUUID().toString()
         val dataUri = SignatureInlineImages.toDataUri(webp)
         editor.finishActiveActionMode()
-        val pendingHtml = insertPendingSignatureImageAndCaptureHtml(
-            editor = editor,
-            dataUri = dataUri,
-            sigId = sigId,
-        )
+        val pendingHtml = suspendCancellableCoroutine<String?> { continuation ->
+            editor.evaluateJavascript(
+                """
+                (function() {
+                  window.SignatureEditor.insertImage(${dataUri.toJsString()}, ${sigId.toJsString()});
+                  return window.SignatureEditor.getHtml();
+                })();
+                """.trimIndent(),
+            ) { serializedHtml ->
+                if (continuation.isActive) {
+                    continuation.resume(serializedHtml.decodeEvaluateJavascriptString())
+                }
+            }
+        }
 
         onStatus(ImageInsertStatus.Loading)
         val publicUrl = withContext(Dispatchers.IO) {
@@ -376,8 +386,8 @@ private fun insertPickedImage(
         } else {
             val resolvedSrc = publicUrl ?: dataUri
             onHtmlChange(
-                resolvePendingSignatureImageHtmlWithFallback(
-                    currentHtml = currentHtmlProvider(),
+                resolvePendingSignatureImageHtml(
+                    html = currentHtmlProvider(),
                     fallbackHtml = pendingHtml,
                     sigId = sigId,
                     resolvedSrc = resolvedSrc,
@@ -386,27 +396,6 @@ private fun insertPickedImage(
             )
         }
         onStatus(ImageInsertStatus.Idle)
-    }
-}
-
-private suspend fun insertPendingSignatureImageAndCaptureHtml(
-    editor: SignatureEditorWebView,
-    dataUri: String,
-    sigId: String,
-): String? {
-    return suspendCancellableCoroutine { continuation ->
-        editor.evaluateJavascript(
-            """
-            (function() {
-              window.SignatureEditor.insertImage(${dataUri.toJsString()}, ${sigId.toJsString()});
-              return window.SignatureEditor.getHtml();
-            })();
-            """.trimIndent(),
-        ) { serializedHtml ->
-            if (continuation.isActive) {
-                continuation.resume(serializedHtml.decodeEvaluateJavascriptString())
-            }
-        }
     }
 }
 
@@ -454,42 +443,30 @@ internal fun String?.decodeEvaluateJavascriptString(): String? {
     }.getOrNull()
 }
 
-internal fun resolvePendingSignatureImageHtmlWithFallback(
-    currentHtml: String,
-    fallbackHtml: String?,
-    sigId: String,
-    resolvedSrc: String,
-    pendingSrc: String? = null,
-): String {
-    val resolvedCurrentHtml = resolvePendingSignatureImageHtml(currentHtml, sigId, resolvedSrc, pendingSrc)
-    if (resolvedCurrentHtml != currentHtml) return resolvedCurrentHtml
-
-    val candidateHtml = fallbackHtml ?: return currentHtml
-    val resolvedFallbackHtml = resolvePendingSignatureImageHtml(candidateHtml, sigId, resolvedSrc, pendingSrc)
-
-    return if (resolvedFallbackHtml != candidateHtml) {
-        resolvedFallbackHtml
-    } else {
-        currentHtml
-    }
-}
-
 internal fun resolvePendingSignatureImageHtml(
     html: String,
+    fallbackHtml: String? = null,
     sigId: String,
     resolvedSrc: String,
     pendingSrc: String? = null,
 ): String {
-    val match = PENDING_SIGNATURE_IMAGE_REGEX.findAll(html)
-        .firstOrNull { it.groupValues[1] == sigId }
-        ?: pendingSrc?.let { pendingImageSrc ->
-            IMG_TAG_REGEX.findAll(html)
-                .firstOrNull { match ->
-                    IMG_SRC_VALUE_REGEX.find(match.value)?.groupValues?.get(1) == pendingImageSrc
-                }
+    val findMatch: (String) -> MatchResult? = { htmlToSearch ->
+        PENDING_SIGNATURE_IMAGE_REGEX.findAll(htmlToSearch)
+            .firstOrNull { it.groupValues[1] == sigId }
+            ?: pendingSrc?.let { pendingImageSrc ->
+                IMG_TAG_REGEX.findAll(htmlToSearch)
+                    .firstOrNull { match ->
+                        IMG_SRC_VALUE_REGEX.find(match.value)?.groupValues?.get(1) == pendingImageSrc
+                    }
+            }
+    }
+    val sourceHtmlAndMatch = findMatch(html)?.let { html to it }
+        ?: fallbackHtml?.let { fallback ->
+            findMatch(fallback)?.let { fallback to it }
         }
         ?: return html
 
+    val (sourceHtml, match) = sourceHtmlAndMatch
     val originalTag = match.value
     val tagWithoutMarker = PENDING_SIGNATURE_ID_ATTRIBUTE_REGEX.replace(originalTag, "")
     val escapedSrc = resolvedSrc.escapeHtmlAttribute()
@@ -499,7 +476,7 @@ internal fun resolvePendingSignatureImageHtml(
         tagWithoutMarker.replace(">", """ src="$escapedSrc">""")
     }
 
-    return html.substring(0, match.range.first) + updatedTag + html.substring(match.range.last + 1)
+    return sourceHtml.substring(0, match.range.first) + updatedTag + sourceHtml.substring(match.range.last + 1)
 }
 
 private fun containsPendingSignatureUpload(html: String): Boolean {

@@ -151,6 +151,12 @@ object SignatureImageIntercepts {
     }
 }
 
+internal data class ImageSizeLabels(
+    val small: String = "Small",
+    val medium: String = "Medium",
+    val original: String = "Original",
+)
+
 internal object SignatureEditorWebViewFactory {
     private const val CONTENT_CHANGE_DEBOUNCE_MS = 400L
 
@@ -204,7 +210,16 @@ internal object SignatureEditorWebViewFactory {
             }
             loadDataWithBaseURL(
                 null,
-                buildEditorDocument(initialHtml, readOnly = readOnly, fontSizeSp = fontSizeSp),
+                buildEditorDocument(
+                    initialHtml,
+                    readOnly = readOnly,
+                    fontSizeSp = fontSizeSp,
+                    imageSizeLabels = ImageSizeLabels(
+                        small = context.getString(R.string.signature_editor_image_size_small),
+                        medium = context.getString(R.string.signature_editor_image_size_medium),
+                        original = context.getString(R.string.signature_editor_image_size_original),
+                    ),
+                ),
                 "text/html",
                 Charsets.UTF_8.name(),
                 null,
@@ -217,7 +232,11 @@ internal object SignatureEditorWebViewFactory {
         signatureHtml: String,
         readOnly: Boolean = false,
         fontSizeSp: Float? = null,
+        imageSizeLabels: ImageSizeLabels = ImageSizeLabels(),
     ): String {
+        val smallLabelJs = imageSizeLabels.small.toJsString()
+        val mediumLabelJs = imageSizeLabels.medium.toJsString()
+        val originalLabelJs = imageSizeLabels.original.toJsString()
         val bodyContent = when {
             signatureHtml.isBlank() -> ""
 
@@ -264,8 +283,38 @@ internal object SignatureEditorWebViewFactory {
               max-height: 320px;
               height: auto;
               object-fit: contain;
+              cursor: pointer;
+            }
+            #editor img.sig-img-active {
+              outline: 2px solid #0b57d0;
+              outline-offset: 1px;
             }
             #editor a { color: #0b57d0; }
+            #sig-resize-bar {
+              position: absolute;
+              display: none;
+              z-index: 20;
+              background: #1f1f1f;
+              border-radius: 8px;
+              padding: 3px;
+              box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+              white-space: nowrap;
+              user-select: none;
+            }
+            #sig-resize-bar button {
+              background: transparent;
+              border: none;
+              color: #cfd8e3;
+              padding: 5px 10px;
+              font-size: 13px;
+              font-family: inherit;
+              cursor: pointer;
+              border-radius: 5px;
+            }
+            #sig-resize-bar button.active {
+              background: #0b57d0;
+              color: #fff;
+            }
           </style>
         </head>
         <body>
@@ -283,6 +332,12 @@ internal object SignatureEditorWebViewFactory {
                 var clone = editor.cloneNode(true);
                 clone.querySelectorAll('img[data-sig-id]').forEach(function(img) {
                   img.removeAttribute('data-sig-id');
+                });
+                clone.querySelectorAll('img.sig-img-active').forEach(function(img) {
+                  img.classList.remove('sig-img-active');
+                  if (!img.getAttribute('class')) {
+                    img.removeAttribute('class');
+                  }
                 });
                 return clone.innerHTML;
               }
@@ -354,6 +409,190 @@ internal object SignatureEditorWebViewFactory {
                 sel.addRange(range);
                 return range;
               }
+              function placeCaretAtEnd() {
+                editor.focus();
+                var sel = window.getSelection();
+                if (!sel) {
+                  return;
+                }
+                var range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                savedRange = range.cloneRange();
+              }
+              function lastMeaningfulChild(parent) {
+                var node = parent.lastChild;
+                while (node && node.nodeType === 3 && !node.textContent.trim()) {
+                  node = node.previousSibling;
+                }
+                return node;
+              }
+              function lastMeaningfulDescendant(node) {
+                var current = node;
+                while (current && current.nodeType === 1) {
+                  var child = lastMeaningfulChild(current);
+                  if (!child) {
+                    break;
+                  }
+                  current = child;
+                }
+                return current === node ? null : current;
+              }
+              // A signature that is only an image (or ends with one) leaves the caret
+              // nowhere to land, so the user cannot type. Guarantee a trailing line.
+              function ensureEditableTail() {
+                var last = lastMeaningfulDescendant(editor);
+                if (last && last.nodeType === 1 && last.tagName === 'IMG') {
+                  editor.appendChild(document.createElement('br'));
+                }
+              }
+              // --- Gmail-style image resize (Small / Medium / Original) ---
+              var resizeBar = null;
+              var activeImg = null;
+              var IMAGE_SIZES = [
+                { key: 'small', label: $smallLabelJs, factor: 0.25, min: 96 },
+                { key: 'medium', label: $mediumLabelJs, factor: 0.5, min: 160 },
+                { key: 'original', label: $originalLabelJs, factor: 1 }
+              ];
+              function naturalWidthOf(img) {
+                return img.naturalWidth ||
+                  parseInt(img.getAttribute('width'), 10) ||
+                  img.clientWidth || 0;
+              }
+              function targetWidth(img, size) {
+                var nat = naturalWidthOf(img);
+                if (!nat) {
+                  return null;
+                }
+                if (size.factor >= 1) {
+                  return nat;
+                }
+                return Math.min(nat, Math.max(size.min || 0, Math.round(nat * size.factor)));
+              }
+              function currentSizeKey(img) {
+                var nat = naturalWidthOf(img);
+                var w = parseInt(img.getAttribute('width'), 10);
+                if (!w || !nat || w >= nat) {
+                  return 'original';
+                }
+                var best = 'original', bestDelta = Infinity;
+                IMAGE_SIZES.forEach(function(size) {
+                  var t = targetWidth(img, size);
+                  if (t == null) {
+                    return;
+                  }
+                  var delta = Math.abs(t - w);
+                  if (delta < bestDelta) {
+                    bestDelta = delta;
+                    best = size.key;
+                  }
+                });
+                return best;
+              }
+              function applyImageSize(img, size) {
+                var w = targetWidth(img, size);
+                if (size.key === 'original') {
+                  img.removeAttribute('width');
+                  img.style.removeProperty('width');
+                } else if (w == null) {
+                  return;
+                } else {
+                  img.setAttribute('width', w);
+                  img.style.width = w + 'px';
+                }
+                img.removeAttribute('height');
+                img.style.height = 'auto';
+                emitNow();
+              }
+              function positionResizeBar(img) {
+                if (!resizeBar) {
+                  return;
+                }
+                var rect = img.getBoundingClientRect();
+                resizeBar.style.left = (window.scrollX + rect.left) + 'px';
+                resizeBar.style.top = (window.scrollY + rect.bottom + 6) + 'px';
+              }
+              function refreshResizeBar(img) {
+                if (!resizeBar) {
+                  return;
+                }
+                var key = currentSizeKey(img);
+                var buttons = resizeBar.querySelectorAll('button');
+                for (var i = 0; i < buttons.length; i++) {
+                  if (buttons[i].getAttribute('data-size') === key) {
+                    buttons[i].classList.add('active');
+                  } else {
+                    buttons[i].classList.remove('active');
+                  }
+                }
+              }
+              function buildResizeBar() {
+                var bar = document.createElement('div');
+                bar.id = 'sig-resize-bar';
+                bar.setAttribute('contenteditable', 'false');
+                IMAGE_SIZES.forEach(function(size) {
+                  var button = document.createElement('button');
+                  button.type = 'button';
+                  button.textContent = size.label;
+                  button.setAttribute('data-size', size.key);
+                  // Keep the editor selection intact when the bar is tapped.
+                  button.addEventListener('mousedown', function(e) { e.preventDefault(); });
+                  button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (activeImg) {
+                      applyImageSize(activeImg, size);
+                      positionResizeBar(activeImg);
+                      refreshResizeBar(activeImg);
+                    }
+                  });
+                  bar.appendChild(button);
+                });
+                document.body.appendChild(bar);
+                return bar;
+              }
+              function showResizeBar(img) {
+                if (!resizeBar) {
+                  resizeBar = buildResizeBar();
+                }
+                if (activeImg && activeImg !== img) {
+                  activeImg.classList.remove('sig-img-active');
+                }
+                activeImg = img;
+                img.classList.add('sig-img-active');
+                refreshResizeBar(img);
+                resizeBar.style.display = 'block';
+                positionResizeBar(img);
+              }
+              function hideResizeBar() {
+                if (resizeBar) {
+                  resizeBar.style.display = 'none';
+                }
+                if (activeImg) {
+                  activeImg.classList.remove('sig-img-active');
+                  activeImg = null;
+                }
+              }
+              if (editor.isContentEditable) {
+                editor.addEventListener('click', function(e) {
+                  var target = e.target;
+                  if (target && target.tagName === 'IMG' && editor.contains(target)) {
+                    showResizeBar(target);
+                  } else {
+                    hideResizeBar();
+                    if (target === editor) {
+                      placeCaretAtEnd();
+                    }
+                  }
+                });
+                document.addEventListener('scroll', function() {
+                  if (activeImg) {
+                    positionResizeBar(activeImg);
+                  }
+                }, true);
+              }
               window.SignatureEditor = {
                 command: function(name, value) {
                   restoreSelection();
@@ -392,6 +631,7 @@ internal object SignatureEditorWebViewFactory {
                   } else {
                     editor.appendChild(img);
                   }
+                  ensureEditableTail();
                   emitNow();
                 },
                 swapImageSrc: function(sigId, newSrc) {
@@ -427,6 +667,9 @@ internal object SignatureEditorWebViewFactory {
                   emitNow();
                 }
               };
+              if (editor.isContentEditable) {
+                ensureEditableTail();
+              }
             })();
           </script>
         </body>

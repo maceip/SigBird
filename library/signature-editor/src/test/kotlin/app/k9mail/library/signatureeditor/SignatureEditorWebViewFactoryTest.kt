@@ -71,6 +71,56 @@ class SignatureEditorWebViewFactoryTest {
     }
 
     @Test
+    fun `buildEditorDocument offers Gmail-style image size options`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
+
+        assertThat(document).contains("sig-resize-bar")
+        assertThat(document).contains("{ key: 'small', label: \"Small\", factor: 0.25, min: 96 }")
+        assertThat(document).contains("{ key: 'medium', label: \"Medium\", factor: 0.5, min: 160 }")
+        assertThat(document).contains("{ key: 'original', label: \"Original\", factor: 1 }")
+        assertThat(document).contains("applyImageSize")
+        assertThat(document).contains("img.setAttribute('width', w)")
+    }
+
+    @Test
+    fun `buildEditorDocument localizes image size labels`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument(
+            signatureHtml = "plain",
+            imageSizeLabels = ImageSizeLabels(small = "Klein", medium = "Mittel", original = "Original"),
+        )
+
+        assertThat(document).contains("label: \"Klein\"")
+        assertThat(document).contains("label: \"Mittel\"")
+    }
+
+    @Test
+    fun `buildEditorDocument keeps image selection markers out of serialized html`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
+
+        assertThat(document).contains("img.classList.remove('sig-img-active')")
+    }
+
+    @Test
+    fun `buildEditorDocument guarantees a caret anchor after trailing images`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
+
+        assertThat(document).contains("ensureEditableTail")
+        assertThat(document).contains("function lastMeaningfulDescendant(node)")
+        assertThat(document).contains("var last = lastMeaningfulDescendant(editor);")
+        assertThat(document).contains("placeCaretAtEnd")
+        assertThat(document).contains("document.createElement('br')")
+    }
+
+    @Test
+    fun `buildEditorDocument keeps pending image widths when resized before load completes`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
+
+        assertThat(document).contains("} else if (w == null) {")
+        assertThat(document).contains("return;")
+        assertThat(document).doesNotContain("size.key === 'original' || w == null")
+    }
+
+    @Test
     fun `buildEditorDocument marks readOnly editors non-editable`() {
         val document = SignatureEditorWebViewFactory.buildEditorDocument(
             signatureHtml = "<i>sig</i>",

@@ -105,8 +105,19 @@ class SignatureEditorWebViewFactoryTest {
         val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
 
         assertThat(document).contains("ensureEditableTail")
+        assertThat(document).contains("function lastMeaningfulDescendant(node)")
+        assertThat(document).contains("var last = lastMeaningfulDescendant(editor);")
         assertThat(document).contains("placeCaretAtEnd")
         assertThat(document).contains("document.createElement('br')")
+    }
+
+    @Test
+    fun `buildEditorDocument keeps pending image widths when resized before load completes`() {
+        val document = SignatureEditorWebViewFactory.buildEditorDocument("plain")
+
+        assertThat(document).contains("} else if (w == null) {")
+        assertThat(document).contains("return;")
+        assertThat(document).doesNotContain("size.key === 'original' || w == null")
     }
 
     @Test

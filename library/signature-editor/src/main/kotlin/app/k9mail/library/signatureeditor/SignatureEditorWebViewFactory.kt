@@ -422,17 +422,28 @@ internal object SignatureEditorWebViewFactory {
                 sel.addRange(range);
                 savedRange = range.cloneRange();
               }
-              function lastMeaningfulChild() {
-                var node = editor.lastChild;
+              function lastMeaningfulChild(parent) {
+                var node = parent.lastChild;
                 while (node && node.nodeType === 3 && !node.textContent.trim()) {
                   node = node.previousSibling;
                 }
                 return node;
               }
+              function lastMeaningfulDescendant(node) {
+                var current = node;
+                while (current && current.nodeType === 1) {
+                  var child = lastMeaningfulChild(current);
+                  if (!child) {
+                    break;
+                  }
+                  current = child;
+                }
+                return current === node ? null : current;
+              }
               // A signature that is only an image (or ends with one) leaves the caret
               // nowhere to land, so the user cannot type. Guarantee a trailing line.
               function ensureEditableTail() {
-                var last = lastMeaningfulChild();
+                var last = lastMeaningfulDescendant(editor);
                 if (last && last.nodeType === 1 && last.tagName === 'IMG') {
                   editor.appendChild(document.createElement('br'));
                 }
@@ -482,9 +493,11 @@ internal object SignatureEditorWebViewFactory {
               }
               function applyImageSize(img, size) {
                 var w = targetWidth(img, size);
-                if (size.key === 'original' || w == null) {
+                if (size.key === 'original') {
                   img.removeAttribute('width');
                   img.style.removeProperty('width');
+                } else if (w == null) {
+                  return;
                 } else {
                   img.setAttribute('width', w);
                   img.style.width = w + 'px';

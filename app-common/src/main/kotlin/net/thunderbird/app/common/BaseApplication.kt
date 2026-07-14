@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import net.thunderbird.app.common.feature.LoggerLifecycleObserver
+import net.thunderbird.app.common.net.AndroidLinkPropertiesDnsServerLookup
 import net.thunderbird.core.common.exception.ExceptionHandler
 import net.thunderbird.core.logging.Logger
 import net.thunderbird.core.logging.file.FileLogSink
@@ -31,6 +32,7 @@ import net.thunderbird.core.ui.theme.manager.ThemeManager
 import org.koin.android.ext.android.inject
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
+import org.minidns.DnsClient
 import androidx.work.Configuration as WorkManagerConfiguration
 
 abstract class BaseApplication : Application(), WorkManagerConfiguration.Provider {
@@ -60,6 +62,8 @@ abstract class BaseApplication : Application(), WorkManagerConfiguration.Provide
 
     override fun onCreate() {
         super.onCreate()
+
+        DnsClient.addDnsServerLookupMechanism(AndroidLinkPropertiesDnsServerLookup(this))
 
         K9.init(this)
         Core.init(this)
